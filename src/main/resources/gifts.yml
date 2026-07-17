@@ -1,0 +1,22 @@
+# 所有礼包可以放在本文件，也可以拆分到 plugins/CloudGift/gifts/*.yml。
+# 多文件仍使用相同的 gifts: 顶层结构，礼包 ID 在所有文件中必须唯一。
+gifts:
+  novice:
+    display-name: '<green>新手礼包'
+    permission: ''
+    cooldown-hours: 24
+    rewards:
+      - type: command
+        command: 'xp add %player% 5 levels'
+
+  monthly:
+    display-name: '<gold>月卡礼包'
+    permission: cloudgift.gift.monthly
+    cooldown-hours: 24
+    rewards:
+      - type: command
+        command: 'give %player% diamond 3'
+      # 先执行 /cloudgift saveitem monthly_bonus 保存主手物品，再取消下方三行的注释：
+      # - type: item
+      #   item: monthly_bonus
+      #   amount: 1

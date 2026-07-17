@@ -1,0 +1,29 @@
+name: CloudGift
+version: '${project.version}'
+main: cn.cloudgift.CloudGiftPlugin
+api-version: '1.21.11'
+authors: [CloudGift]
+description: 支持共享数据库、权限与自定义冷却的礼包插件
+softdepend: [PlaceholderAPI]
+libraries:
+  - com.zaxxer:HikariCP:${hikaricp.version}
+  - com.mysql:mysql-connector-j:${mysql-connector.version}
+  - org.xerial:sqlite-jdbc:${sqlite-jdbc.version}
+
+commands:
+  gift:
+    description: 领取或查看礼包
+    usage: /gift <礼包ID>
+    aliases: [libao, cgift]
+  cloudgift:
+    description: CloudGift 管理命令
+    usage: /cloudgift <reload|saveitem|list|claim|reset>
+    aliases: [cloudgifts]
+
+permissions:
+  cloudgift.admin:
+    description: 允许使用 CloudGift 的全部管理命令
+    default: op
+  cloudgift.command.gift:
+    description: 允许使用礼包领取命令
+    default: true

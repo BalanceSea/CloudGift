@@ -1,0 +1,2 @@
+# 使用 /cloudgift saveitem <物品ID> 保存主手物品后，本文件会自动写入物品数据。
+items: {}

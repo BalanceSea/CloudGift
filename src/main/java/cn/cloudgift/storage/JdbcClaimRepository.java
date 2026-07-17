@@ -1,0 +1,204 @@
+package cn.cloudgift.storage;
+
+import com.zaxxer.hikari.HikariConfig;
+import com.zaxxer.hikari.HikariDataSource;
+import java.io.File;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.OptionalLong;
+import java.util.UUID;
+import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.plugin.java.JavaPlugin;
+
+public final class JdbcClaimRepository implements ClaimRepository {
+
+    private final HikariDataSource dataSource;
+    private final String table;
+
+    public JdbcClaimRepository(JavaPlugin plugin) throws SQLException {
+        FileConfiguration config = plugin.getConfig();
+        String prefix = config.getString("storage.table-prefix", "cloudgift_");
+        if (prefix == null || !prefix.matches("[A-Za-z0-9_]+")) {
+            throw new IllegalArgumentException("storage.table-prefix 只能包含字母、数字和下划线");
+        }
+        this.table = prefix + "claims";
+        this.dataSource = new HikariDataSource(createPoolConfig(plugin, config));
+        try {
+            createTable(config.getString("storage.type", "sqlite"));
+        } catch (SQLException | RuntimeException exception) {
+            dataSource.close();
+            throw exception;
+        }
+    }
+
+    @Override
+    public ClaimAttempt attemptClaim(UUID playerId, String giftId, long cooldownMillis, long now)
+            throws SQLException {
+        long cutoff = now - Math.min(now, Math.max(0L, cooldownMillis));
+        String token = UUID.randomUUID().toString();
+
+        try (Connection connection = dataSource.getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                String updateSql = "UPDATE " + table
+                        + " SET last_claim = ?, claim_token = ?"
+                        + " WHERE player_uuid = ? AND gift_id = ? AND last_claim <= ?";
+                try (PreparedStatement statement = connection.prepareStatement(updateSql)) {
+                    statement.setLong(1, now);
+                    statement.setString(2, token);
+                    statement.setString(3, playerId.toString());
+                    statement.setString(4, giftId);
+                    statement.setLong(5, cutoff);
+                    if (statement.executeUpdate() == 1) {
+                        connection.commit();
+                        return ClaimAttempt.accepted(now);
+                    }
+                }
+
+                OptionalLong existing = findLastClaim(connection, playerId, giftId);
+                if (existing.isPresent()) {
+                    connection.commit();
+                    return ClaimAttempt.rejected(existing.getAsLong());
+                }
+
+                String insertSql = "INSERT INTO " + table
+                        + " (player_uuid, gift_id, last_claim, claim_token) VALUES (?, ?, ?, ?)";
+                try (PreparedStatement statement = connection.prepareStatement(insertSql)) {
+                    statement.setString(1, playerId.toString());
+                    statement.setString(2, giftId);
+                    statement.setLong(3, now);
+                    statement.setString(4, token);
+                    statement.executeUpdate();
+                }
+                connection.commit();
+                return ClaimAttempt.accepted(now);
+            } catch (SQLException exception) {
+                connection.rollback();
+                OptionalLong winner = findLastClaim(connection, playerId, giftId);
+                if (winner.isPresent()) {
+                    return ClaimAttempt.rejected(winner.getAsLong());
+                }
+                throw exception;
+            } finally {
+                connection.setAutoCommit(true);
+            }
+        }
+    }
+
+    @Override
+    public Map<String, Long> loadClaims(UUID playerId) throws SQLException {
+        String sql = "SELECT gift_id, last_claim FROM " + table + " WHERE player_uuid = ?";
+        Map<String, Long> claims = new HashMap<>();
+        try (Connection connection = dataSource.getConnection();
+                PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, playerId.toString());
+            try (ResultSet resultSet = statement.executeQuery()) {
+                while (resultSet.next()) {
+                    claims.put(resultSet.getString("gift_id"), resultSet.getLong("last_claim"));
+                }
+            }
+        }
+        return claims;
+    }
+
+    @Override
+    public OptionalLong findLastClaim(UUID playerId, String giftId) throws SQLException {
+        try (Connection connection = dataSource.getConnection()) {
+            return findLastClaim(connection, playerId, giftId);
+        }
+    }
+
+    @Override
+    public void reset(UUID playerId, String giftId) throws SQLException {
+        String sql = "DELETE FROM " + table + " WHERE player_uuid = ? AND gift_id = ?";
+        try (Connection connection = dataSource.getConnection();
+                PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, playerId.toString());
+            statement.setString(2, giftId);
+            statement.executeUpdate();
+        }
+    }
+
+    @Override
+    public void close() {
+        dataSource.close();
+    }
+
+    private OptionalLong findLastClaim(Connection connection, UUID playerId, String giftId) throws SQLException {
+        String sql = "SELECT last_claim FROM " + table + " WHERE player_uuid = ? AND gift_id = ?";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, playerId.toString());
+            statement.setString(2, giftId);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                return resultSet.next() ? OptionalLong.of(resultSet.getLong(1)) : OptionalLong.empty();
+            }
+        }
+    }
+
+    private HikariConfig createPoolConfig(JavaPlugin plugin, FileConfiguration config) {
+        String type = config.getString("storage.type", "sqlite").toLowerCase();
+        HikariConfig pool = new HikariConfig();
+        pool.setPoolName("CloudGift-Database");
+        pool.setConnectionTimeout(config.getLong("storage.pool.connection-timeout-ms", 5000L));
+        pool.setMaxLifetime(config.getLong("storage.pool.max-lifetime-ms", 1_800_000L));
+
+        if (type.equals("mysql") || type.equals("mariadb")) {
+            String host = config.getString("storage.mysql.host", "127.0.0.1");
+            int port = config.getInt("storage.mysql.port", 3306);
+            String database = config.getString("storage.mysql.database", "minecraft");
+            String parameters = config.getString("storage.mysql.parameters", "useSSL=false");
+            String separator = parameters == null || parameters.isBlank() ? "" : "?" + parameters;
+            pool.setJdbcUrl("jdbc:mysql://" + host + ":" + port + "/" + database + separator);
+            pool.setUsername(config.getString("storage.mysql.username", "root"));
+            pool.setPassword(config.getString("storage.mysql.password", ""));
+            pool.setDriverClassName("com.mysql.cj.jdbc.Driver");
+            int maximumPoolSize = Math.max(2, config.getInt("storage.pool.maximum-pool-size", 10));
+            int minimumIdle = Math.max(0, config.getInt("storage.pool.minimum-idle", 2));
+            pool.setMaximumPoolSize(maximumPoolSize);
+            pool.setMinimumIdle(Math.min(maximumPoolSize, minimumIdle));
+            pool.addDataSourceProperty("cachePrepStmts", "true");
+            pool.addDataSourceProperty("prepStmtCacheSize", "250");
+            pool.addDataSourceProperty("prepStmtCacheSqlLimit", "2048");
+        } else if (type.equals("sqlite")) {
+            File database = new File(plugin.getDataFolder(), "data.db");
+            pool.setJdbcUrl("jdbc:sqlite:" + database.getAbsolutePath());
+            pool.setDriverClassName("org.sqlite.JDBC");
+            pool.setMaximumPoolSize(1);
+            pool.setMinimumIdle(1);
+            pool.addDataSourceProperty("busy_timeout", "5000");
+        } else {
+            throw new IllegalArgumentException("不支持的 storage.type: " + type);
+        }
+        return pool;
+    }
+
+    private void createTable(String storageType) throws SQLException {
+        String type = storageType == null ? "sqlite" : storageType.toLowerCase();
+        String sql;
+        if (type.equals("mysql") || type.equals("mariadb")) {
+            sql = "CREATE TABLE IF NOT EXISTS " + table + " ("
+                    + "player_uuid CHAR(36) NOT NULL,"
+                    + "gift_id VARCHAR(128) NOT NULL,"
+                    + "last_claim BIGINT NOT NULL,"
+                    + "claim_token CHAR(36) NOT NULL,"
+                    + "PRIMARY KEY (player_uuid, gift_id)"
+                    + ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin";
+        } else {
+            sql = "CREATE TABLE IF NOT EXISTS " + table + " ("
+                    + "player_uuid TEXT NOT NULL,"
+                    + "gift_id TEXT NOT NULL,"
+                    + "last_claim INTEGER NOT NULL,"
+                    + "claim_token TEXT NOT NULL,"
+                    + "PRIMARY KEY (player_uuid, gift_id)"
+                    + ")";
+        }
+        try (Connection connection = dataSource.getConnection(); Statement statement = connection.createStatement()) {
+            statement.executeUpdate(sql);
+        }
+    }
+}

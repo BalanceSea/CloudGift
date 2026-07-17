@@ -1,0 +1,31 @@
+# 存储类型：sqlite（单服）或 mysql（群组服推荐）
+storage:
+  type: sqlite
+  table-prefix: cloudgift_
+  mysql:
+    host: 127.0.0.1
+    port: 3306
+    database: minecraft
+    username: root
+    password: change_me
+    parameters: useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+  pool:
+    maximum-pool-size: 10
+    minimum-idle: 2
+    connection-timeout-ms: 5000
+    max-lifetime-ms: 1800000
+
+# DateTimeFormatter 格式；参考 Java DateTimeFormatter 文档
+time:
+  pattern: yyyy-MM-dd HH:mm:ss
+  zone-id: Asia/Shanghai
+
+placeholder:
+  available-time: 可领取
+  no-permission-time: 无权限
+  unknown-gift: 未知礼包
+  loading-time: 数据加载中
+
+# 玩家进入服务器时会异步载入其领取记录，供 PAPI 无阻塞读取。
+data:
+  preload-on-join: true
