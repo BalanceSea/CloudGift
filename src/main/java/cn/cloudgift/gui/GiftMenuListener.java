@@ -7,12 +7,13 @@ import java.util.List;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
-import org.bukkit.event.inventory.ClickType;
+import org.bukkit.event.inventory.InventoryAction;
 import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
-import org.bukkit.inventory.ItemStack;
 
 /** Routes clicks inside the CloudGift editor menus to the appropriate GUI actions. */
 public final class GiftMenuListener implements Listener {
@@ -38,7 +39,8 @@ public final class GiftMenuListener implements Listener {
         if (!menu.owner().getUniqueId().equals(player.getUniqueId())) {
             return;
         }
-        if (menu.type() == GiftMenuHolder.Type.REWARDS && handleDirectItemInput(player, event)) {
+        if (menu.type() == GiftMenuHolder.Type.ITEM_INPUT) {
+            handleItemInputClick(player, event);
             return;
         }
         if (event.getClickedInventory() == null
@@ -50,6 +52,7 @@ public final class GiftMenuListener implements Listener {
             case LIST -> handleList(player, slot);
             case EDIT -> handleEdit(player, slot, event);
             case REWARDS -> handleRewards(player, slot, event);
+            case ITEM_INPUT -> { }
         }
     }
 
@@ -59,31 +62,37 @@ public final class GiftMenuListener implements Listener {
         if (!(holder instanceof GiftMenuHolder menu)) {
             return;
         }
-        event.setCancelled(true);
         if (!(event.getWhoClicked() instanceof Player player)
-                || menu.type() != GiftMenuHolder.Type.REWARDS
-                || !menu.owner().getUniqueId().equals(player.getUniqueId())
-                || event.getRawSlots().size() != 1) {
+                || !menu.owner().getUniqueId().equals(player.getUniqueId())) {
+            event.setCancelled(true);
+            return;
+        }
+        if (menu.type() != GiftMenuHolder.Type.ITEM_INPUT) {
+            event.setCancelled(true);
             return;
         }
 
-        GiftDraft draft = gui.draft(player.getUniqueId());
-        if (draft == null) {
-            return;
-        }
-        int rawSlot = event.getRawSlots().iterator().next();
-        if (!isEmptyRewardSlot(rawSlot, draft.rewards().size())) {
-            return;
-        }
-        ItemStack input = event.getNewItems().get(rawSlot);
-        if (GiftEditorGui.isUsableItem(input)) {
-            gui.addDirectItemNextTick(player, input);
+        int topSize = event.getView().getTopInventory().getSize();
+        boolean touchesControlSlot = event.getRawSlots().stream()
+                .anyMatch(slot -> slot < topSize && !GiftEditorGui.isItemInputStorageSlot(slot));
+        event.setCancelled(touchesControlSlot);
+    }
+
+    @EventHandler
+    public void onClose(InventoryCloseEvent event) {
+        Inventory inventory = event.getInventory();
+        if (inventory.getHolder() instanceof GiftMenuHolder menu
+                && menu.type() == GiftMenuHolder.Type.ITEM_INPUT
+                && event.getPlayer() instanceof Player player) {
+            gui.closeItemInput(player, inventory);
         }
     }
 
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
-        gui.clearDraft(event.getPlayer().getUniqueId());
+        Player player = event.getPlayer();
+        gui.closeActiveItemInput(player);
+        gui.clearDraft(player.getUniqueId());
     }
 
     private void handleList(Player player, int slot) {
@@ -147,7 +156,11 @@ public final class GiftMenuListener implements Listener {
             return;
         }
         if (slot == GiftEditorGui.SLOT_ADD_ITEM) {
-            gui.promptAddItem(player);
+            if (event.isLeftClick()) {
+                gui.openItemInput(player);
+            } else if (event.isRightClick()) {
+                gui.promptAddItem(player);
+            }
             return;
         }
         if (slot == GiftEditorGui.SLOT_REWARDS_BACK) {
@@ -163,49 +176,43 @@ public final class GiftMenuListener implements Listener {
         }
     }
 
-    private boolean handleDirectItemInput(Player player, InventoryClickEvent event) {
-        GiftDraft draft = gui.draft(player.getUniqueId());
-        if (draft == null) {
-            return false;
-        }
-        if (event.isShiftClick() && event.getClickedInventory() == player.getInventory()) {
-            ItemStack input = event.getCurrentItem();
-            if (GiftEditorGui.isUsableItem(input)) {
-                gui.addDirectItem(player, input);
-                return true;
-            }
-            return false;
-        }
-
+    private void handleItemInputClick(Player player, InventoryClickEvent event) {
+        event.setCancelled(true);
         int rawSlot = event.getRawSlot();
-        if (rawSlot != GiftEditorGui.SLOT_ADD_ITEM
-                && !isEmptyRewardSlot(rawSlot, draft.rewards().size())) {
-            return false;
+        if (rawSlot == GiftEditorGui.SLOT_ITEM_INPUT_SAVE) {
+            gui.saveItemInput(player, event.getView().getTopInventory());
+            return;
         }
-        ItemStack input = directInputFromClick(player, event);
-        if (!GiftEditorGui.isUsableItem(input)) {
-            return false;
+        if (rawSlot == GiftEditorGui.SLOT_ITEM_INPUT_CANCEL) {
+            gui.cancelItemInput(player, event.getView().getTopInventory());
+            return;
         }
-        gui.addDirectItem(player, input);
-        return true;
+        if (GiftEditorGui.isItemInputStorageSlot(rawSlot)) {
+            event.setCancelled(!isAllowedStorageAction(event.getAction()));
+            return;
+        }
+
+        int topSize = event.getView().getTopInventory().getSize();
+        if (rawSlot >= topSize && event.getAction() == InventoryAction.MOVE_TO_OTHER_INVENTORY) {
+            event.setCurrentItem(gui.moveIntoItemInput(
+                    event.getView().getTopInventory(), event.getCurrentItem()));
+            return;
+        }
+        if (rawSlot >= topSize
+                && event.getAction() != InventoryAction.COLLECT_TO_CURSOR
+                && event.getAction() != InventoryAction.UNKNOWN) {
+            event.setCancelled(false);
+        }
     }
 
-    private ItemStack directInputFromClick(Player player, InventoryClickEvent event) {
-        if (event.getClick() == ClickType.NUMBER_KEY) {
-            int hotbarButton = event.getHotbarButton();
-            return hotbarButton >= 0 ? player.getInventory().getItem(hotbarButton) : null;
-        }
-        if (event.getClick() == ClickType.SWAP_OFFHAND) {
-            return player.getInventory().getItemInOffHand();
-        }
-        if (event.getClick() == ClickType.LEFT || event.getClick() == ClickType.RIGHT) {
-            return event.getCursor();
-        }
-        return null;
-    }
-
-    private boolean isEmptyRewardSlot(int rawSlot, int rewardCount) {
-        return rawSlot >= rewardCount && rawSlot >= 0 && rawSlot < GiftEditorGui.MAX_REWARDS;
+    private boolean isAllowedStorageAction(InventoryAction action) {
+        return switch (action) {
+            case PICKUP_ALL, PICKUP_SOME, PICKUP_HALF, PICKUP_ONE,
+                    PLACE_ALL, PLACE_SOME, PLACE_ONE, SWAP_WITH_CURSOR,
+                    MOVE_TO_OTHER_INVENTORY, HOTBAR_SWAP, HOTBAR_MOVE_AND_READD,
+                    DROP_ALL_SLOT, DROP_ONE_SLOT -> true;
+            default -> false;
+        };
     }
 
     private double cooldownDelta(InventoryClickEvent event) {

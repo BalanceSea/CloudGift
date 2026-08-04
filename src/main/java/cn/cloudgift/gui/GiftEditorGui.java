@@ -7,6 +7,7 @@ import cn.cloudgift.gift.RewardDefinition;
 import cn.cloudgift.message.MessageService;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -28,6 +29,10 @@ import org.bukkit.plugin.java.JavaPlugin;
 public final class GiftEditorGui {
 
     static final int MAX_REWARDS = 45;
+    static final int ITEM_INPUT_STORAGE_SIZE = 45;
+    static final int ITEM_INPUT_INVENTORY_SIZE = 54;
+    static final int SLOT_ITEM_INPUT_SAVE = 49;
+    static final int SLOT_ITEM_INPUT_CANCEL = 53;
 
     private final JavaPlugin plugin;
     private final GiftRegistry gifts;
@@ -36,6 +41,7 @@ public final class GiftEditorGui {
     private final ChatInputService chatInput;
     // Active editing draft per player, shared across the edit and rewards menus.
     private final Map<UUID, GiftDraft> drafts = new ConcurrentHashMap<>();
+    private final Map<UUID, Inventory> itemInputInventories = new ConcurrentHashMap<>();
 
     public GiftEditorGui(
             JavaPlugin plugin,
@@ -53,6 +59,7 @@ public final class GiftEditorGui {
     // === List menu ===
 
     public void openList(Player player) {
+        closeActiveItemInput(player);
         clearDraft(player.getUniqueId());
         GiftMenuHolder holder = new GiftMenuHolder(GiftMenuHolder.Type.LIST, player);
         Inventory inventory = Bukkit.createInventory(holder, 54, Component.text("礼包编辑器"));
@@ -203,10 +210,9 @@ public final class GiftEditorGui {
         inventory.setItem(SLOT_ADD_COMMAND, button(Material.COMMAND_BLOCK, "<green>添加命令奖励",
                 List.of("<gray>点击后输入命令", "<dark_gray>可用 %player% %uuid% %gift%")));
         inventory.setItem(SLOT_ADD_ITEM, button(Material.ITEM_FRAME, "<green>添加物品奖励",
-                List.of("<gray>把光标物品放到空奖励格",
-                        "<gray>或 Shift 点击背包物品",
-                        "<dark_gray>只复制模板，不消耗原物品",
-                        "<yellow>空手点击可输入已有物品 ID")));
+                List.of("<yellow>左键: 打开物品投放界面",
+                        "<gray>可像箱子一样放入多件物品",
+                        "<yellow>右键: 输入已有物品 ID")));
         inventory.setItem(SLOT_REWARDS_BACK, button(Material.ARROW, "<gray>返回编辑", List.of()));
         player.openInventory(inventory);
     }
@@ -242,38 +248,123 @@ public final class GiftEditorGui {
         return saved;
     }
 
-    public void addDirectItem(Player player, ItemStack source) {
+    public void openItemInput(Player player) {
         GiftDraft draft = drafts.get(player.getUniqueId());
-        if (draft == null || !isUsableItem(source)) {
+        if (draft == null) {
+            openList(player);
             return;
         }
         if (!hasRewardCapacity(player, draft)) {
             return;
         }
 
-        ItemStack copy = source.clone();
-        String itemId = items.nextGuiItemId(draft.id());
-        try {
-            items.save(itemId, copy);
-            draft.trackTemporaryItem(itemId);
-            draft.rewards().add(new RewardDefinition.ItemReward(itemId, copy.getAmount()));
-            messages.send(player, "gui-item-added", Map.of(
-                    "amount", Integer.toString(copy.getAmount()),
-                    "item", copy.getType().name().toLowerCase(Locale.ROOT)));
-            openRewards(player);
-        } catch (IOException | RuntimeException exception) {
-            plugin.getLogger().log(Level.SEVERE, "从礼包 GUI 保存物品失败", exception);
-            messages.send(player, "gui-item-add-failed");
+        closeActiveItemInput(player);
+        GiftMenuHolder holder = new GiftMenuHolder(GiftMenuHolder.Type.ITEM_INPUT, player);
+        Inventory inventory = Bukkit.createInventory(
+                holder,
+                ITEM_INPUT_INVENTORY_SIZE,
+                Component.text("放入礼包物品: " + draft.id()));
+        holder.setInventory(inventory);
+
+        ItemStack filler = button(Material.GRAY_STAINED_GLASS_PANE, "<dark_gray>控制区域", List.of());
+        for (int slot = ITEM_INPUT_STORAGE_SIZE; slot < ITEM_INPUT_INVENTORY_SIZE; slot++) {
+            inventory.setItem(slot, filler);
         }
+        inventory.setItem(SLOT_ITEM_INPUT_SAVE, button(Material.LIME_DYE, "<green>保存物品奖励",
+                List.of("<gray>保存前 45 格内的全部物品", "<gray>保存后原物品会返还给你")));
+        inventory.setItem(SLOT_ITEM_INPUT_CANCEL, button(Material.ARROW, "<red>取消并返回",
+                List.of("<gray>不保存，并返还已放入的物品")));
+
+        itemInputInventories.put(player.getUniqueId(), inventory);
+        player.openInventory(inventory);
     }
 
-    public void addDirectItemNextTick(Player player, ItemStack source) {
-        ItemStack copy = source.clone();
-        Bukkit.getScheduler().runTask(plugin, () -> {
-            if (player.isOnline()) {
-                addDirectItem(player, copy);
-            }
-        });
+    public void saveItemInput(Player player, Inventory inventory) {
+        GiftDraft draft = drafts.get(player.getUniqueId());
+        if (draft == null || !isOwnedItemInput(player, inventory)) {
+            return;
+        }
+
+        List<ItemStack> inputItems = copyItemInputContents(inventory);
+        if (inputItems.isEmpty()) {
+            messages.send(player, "gui-item-input-empty");
+            return;
+        }
+        int remaining = draft.remainingRewardCapacity(MAX_REWARDS);
+        if (inputItems.size() > remaining) {
+            messages.send(player, "gui-item-input-too-many", Map.of(
+                    "count", Integer.toString(inputItems.size()),
+                    "remaining", Integer.toString(remaining)));
+            return;
+        }
+
+        Map<String, ItemStack> itemBatch = new LinkedHashMap<>();
+        List<String> savedItemIds = new ArrayList<>(inputItems.size());
+        for (ItemStack inputItem : inputItems) {
+            String itemId;
+            do {
+                itemId = items.nextGuiItemId(draft.id());
+            } while (itemBatch.containsKey(itemId));
+            itemBatch.put(itemId, inputItem);
+            savedItemIds.add(itemId);
+        }
+        try {
+            items.saveAll(itemBatch);
+        } catch (IOException | RuntimeException exception) {
+            rollbackInputItems(draft, savedItemIds);
+            plugin.getLogger().log(Level.SEVERE, "从礼包物品投放 GUI 批量保存失败", exception);
+            messages.send(player, "gui-item-add-failed");
+            return;
+        }
+
+        for (int index = 0; index < inputItems.size(); index++) {
+            String itemId = savedItemIds.get(index);
+            ItemStack inputItem = inputItems.get(index);
+            draft.trackTemporaryItem(itemId);
+            draft.rewards().add(new RewardDefinition.ItemReward(itemId, inputItem.getAmount()));
+        }
+
+        int returned = closeItemInput(player, inventory, false);
+        messages.send(player, "gui-items-added", Map.of(
+                "count", Integer.toString(inputItems.size()),
+                "returned", Integer.toString(returned)));
+        openRewardsNextTick(player);
+    }
+
+    public void cancelItemInput(Player player, Inventory inventory) {
+        closeItemInput(player, inventory);
+        openRewardsNextTick(player);
+    }
+
+    public int closeItemInput(Player player, Inventory inventory) {
+        return closeItemInput(player, inventory, true);
+    }
+
+    private int closeItemInput(Player player, Inventory inventory, boolean notifyPlayer) {
+        if (!isOwnedItemInput(player, inventory)) {
+            return 0;
+        }
+        itemInputInventories.remove(player.getUniqueId(), inventory);
+        List<ItemStack> returnedItems = takeItemInputContents(inventory);
+        if (returnedItems.isEmpty()) {
+            return 0;
+        }
+
+        Map<Integer, ItemStack> overflow = player.getInventory().addItem(
+                returnedItems.toArray(ItemStack[]::new));
+        overflow.values().forEach(item -> player.getWorld().dropItemNaturally(player.getLocation(), item));
+        if (notifyPlayer) {
+            messages.send(player, "gui-item-input-returned", Map.of(
+                    "count", Integer.toString(returnedItems.size())));
+        }
+        return returnedItems.size();
+    }
+
+    public void closeActiveItemInput(Player player) {
+        Inventory inventory = itemInputInventories.get(player.getUniqueId());
+        if (inventory != null) {
+            closeItemInput(player, inventory);
+        }
     }
 
     public void removeReward(Player player, int index) {
@@ -301,6 +392,42 @@ public final class GiftEditorGui {
 
     static boolean isUsableItem(ItemStack item) {
         return item != null && item.getType() != Material.AIR && item.getAmount() > 0;
+    }
+
+    static boolean isItemInputStorageSlot(int rawSlot) {
+        return rawSlot >= 0 && rawSlot < ITEM_INPUT_STORAGE_SIZE;
+    }
+
+    public ItemStack moveIntoItemInput(Inventory inventory, ItemStack source) {
+        if (!isUsableItem(source)) {
+            return source;
+        }
+
+        ItemStack remaining = source.clone();
+        for (int slot = 0; slot < ITEM_INPUT_STORAGE_SIZE && remaining.getAmount() > 0; slot++) {
+            ItemStack existing = inventory.getItem(slot);
+            if (!isUsableItem(existing) || !existing.isSimilar(remaining)) {
+                continue;
+            }
+            int capacity = existing.getMaxStackSize() - existing.getAmount();
+            if (capacity <= 0) {
+                continue;
+            }
+            int moved = Math.min(capacity, remaining.getAmount());
+            existing.setAmount(existing.getAmount() + moved);
+            remaining.setAmount(remaining.getAmount() - moved);
+        }
+        for (int slot = 0; slot < ITEM_INPUT_STORAGE_SIZE && remaining.getAmount() > 0; slot++) {
+            if (isUsableItem(inventory.getItem(slot))) {
+                continue;
+            }
+            int moved = Math.min(remaining.getAmount(), remaining.getMaxStackSize());
+            ItemStack placed = remaining.clone();
+            placed.setAmount(moved);
+            inventory.setItem(slot, placed);
+            remaining.setAmount(remaining.getAmount() - moved);
+        }
+        return remaining.getAmount() > 0 ? remaining : null;
     }
 
     // === Persistence ===
@@ -432,7 +559,24 @@ public final class GiftEditorGui {
         chatInput.await(player, callback);
     }
 
+    private void openRewardsNextTick(Player player) {
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            if (player.isOnline() && drafts.containsKey(player.getUniqueId())) {
+                openRewards(player);
+            }
+        });
+    }
+
     public void shutdown() {
+        List<Map.Entry<UUID, Inventory>> activeInputs = List.copyOf(itemInputInventories.entrySet());
+        for (Map.Entry<UUID, Inventory> entry : activeInputs) {
+            Inventory inventory = entry.getValue();
+            if (inventory.getHolder() instanceof GiftMenuHolder holder) {
+                closeItemInput(holder.owner(), inventory);
+            }
+        }
+        itemInputInventories.clear();
+
         List<GiftDraft> activeDrafts = List.copyOf(drafts.values());
         drafts.clear();
         activeDrafts.forEach(this::cleanupTemporaryItems);
@@ -447,18 +591,57 @@ public final class GiftEditorGui {
         if (draft == null) {
             return;
         }
-        for (String itemId : draft.temporaryItemIds()) {
-            try {
-                items.delete(itemId);
-                draft.releaseTemporaryItem(itemId);
-            } catch (IOException exception) {
-                plugin.getLogger().log(Level.WARNING, "清理未保存的 GUI 物品失败: " + itemId, exception);
+        List<String> itemIds = draft.temporaryItemIds();
+        try {
+            items.deleteAll(itemIds);
+            itemIds.forEach(draft::releaseTemporaryItem);
+        } catch (IOException | RuntimeException exception) {
+            plugin.getLogger().log(Level.WARNING, "批量清理未保存的 GUI 物品失败", exception);
+        }
+    }
+
+    private boolean isOwnedItemInput(Player player, Inventory inventory) {
+        if (inventory == null || !(inventory.getHolder() instanceof GiftMenuHolder holder)) {
+            return false;
+        }
+        return holder.type() == GiftMenuHolder.Type.ITEM_INPUT
+                && holder.owner().getUniqueId().equals(player.getUniqueId());
+    }
+
+    private List<ItemStack> copyItemInputContents(Inventory inventory) {
+        List<ItemStack> result = new ArrayList<>();
+        for (int slot = 0; slot < ITEM_INPUT_STORAGE_SIZE; slot++) {
+            ItemStack item = inventory.getItem(slot);
+            if (isUsableItem(item)) {
+                result.add(item.clone());
             }
+        }
+        return result;
+    }
+
+    private List<ItemStack> takeItemInputContents(Inventory inventory) {
+        List<ItemStack> result = new ArrayList<>();
+        for (int slot = 0; slot < ITEM_INPUT_STORAGE_SIZE; slot++) {
+            ItemStack item = inventory.getItem(slot);
+            if (isUsableItem(item)) {
+                result.add(item.clone());
+                inventory.setItem(slot, null);
+            }
+        }
+        return result;
+    }
+
+    private void rollbackInputItems(GiftDraft draft, List<String> savedItemIds) {
+        try {
+            items.deleteAll(savedItemIds);
+        } catch (IOException | RuntimeException exception) {
+            savedItemIds.forEach(draft::trackTemporaryItem);
+            plugin.getLogger().log(Level.SEVERE, "批量回滚礼包投放物品失败", exception);
         }
     }
 
     private boolean hasRewardCapacity(Player player, GiftDraft draft) {
-        if (draft.rewards().size() < MAX_REWARDS) {
+        if (draft.remainingRewardCapacity(MAX_REWARDS) > 0) {
             return true;
         }
         messages.send(player, "gui-rewards-full");

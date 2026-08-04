@@ -95,6 +95,10 @@ public final class GiftDraft {
         return rewards;
     }
 
+    public int remainingRewardCapacity(int maximum) {
+        return Math.max(0, maximum - rewards.size());
+    }
+
     public void trackTemporaryItem(String itemId) {
         if (itemId != null && !itemId.isBlank()) {
             temporaryItemIds.add(itemId);

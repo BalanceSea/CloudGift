@@ -1,10 +1,10 @@
 # CloudGift
 
-CloudGift 1.3.0 是面向 Paper 1.21.11（Java 21）的礼包插件。它支持权限礼包、自定义领取冷却、累计领取次数、GUI 直接添加物品、控制台命令奖励、PlaceholderAPI，以及适合群组服的 MySQL/MariaDB 共享存储。
+CloudGift 1.4.0 是面向 Paper 1.21.11（Java 21）的礼包插件。它支持权限礼包、自定义领取冷却、累计领取次数、GUI 直接投放物品、控制台命令奖励、PlaceholderAPI，以及适合群组服的 MySQL/MariaDB 共享存储。
 
 ## 安装
 
-1. 将 `CloudGift-1.3.0.jar` 放入服务端的 `plugins` 目录。
+1. 将 `CloudGift-1.4.0.jar` 放入服务端的 `plugins` 目录。
 2. 如需变量功能，安装 PlaceholderAPI。
 3. 启动一次服务端，修改 `plugins/CloudGift/config.yml`、`messages.yml` 和礼包文件。
 4. 执行 `/cloudgift reload` 重载礼包、物品、消息、时间格式等配置。数据库连接设置变更后需要重启服务端。
@@ -72,13 +72,14 @@ gifts:
 
 物品会保存至 `items.yml`，礼包奖励通过物品 ID 引用它。
 
-也可以执行 `/cloudgift menu` 打开礼包编辑器，在“奖励列表”中直接添加背包物品：
+也可以执行 `/cloudgift menu` 打开礼包编辑器，在“奖励列表”中左键“添加物品奖励”。插件会打开一个 54 格投放界面：
 
-- 把物品拿到光标后，点击任意空奖励格或“添加物品奖励”按钮。
-- Shift 点击背包物品，可直接复制整组物品为奖励。
-- 空奖励格支持数字键、副手交换键和单槽拖入。
+- 前 45 格是物品区，可以像箱子一样普通点击、Shift 转移、拖拽、按数字键或使用副手交换键放入物品。
+- 点击底部“保存物品奖励”后，每个非空格都会成为一项奖励；名称、Lore、附魔和组件会完整写入 `items.yml`。
+- 保存、取消、直接关闭 GUI、退出服务器或插件停用时，放入的原物品都会返还；背包已满的部分会掉落在管理员脚下。
+- 保存整批物品时只写入一次 `items.yml`；写入失败会保留 GUI 内容，不会产生半套奖励。
 
-GUI 只复制物品模板，不会扣除管理员背包中的原物品。物品名称、Lore、附魔和组件会完整写入 `items.yml`，插件会自动生成 `__cloudgift_gui_` 开头的内部物品 ID。空手点击“添加物品奖励”仍可输入已有物品 ID。
+插件会自动生成 `__cloudgift_gui_` 开头的内部物品 ID。右键“添加物品奖励”仍可输入已有物品 ID 和数量。
 
 ## PlaceholderAPI 变量
 
@@ -139,7 +140,7 @@ storage:
 mvn clean package
 ```
 
-构建产物位于 `target/CloudGift-1.3.0.jar`。这是不包含数据库驱动的轻量 JAR；运行依赖声明在 `plugin.yml` 的 `libraries` 节点中。
+构建产物位于 `target/CloudGift-1.4.0.jar`。这是不包含数据库驱动的轻量 JAR；运行依赖声明在 `plugin.yml` 的 `libraries` 节点中。
 
 ## 联系方式
 

@@ -11,7 +11,8 @@ public final class GiftMenuHolder implements InventoryHolder {
     public enum Type {
         LIST,
         EDIT,
-        REWARDS
+        REWARDS,
+        ITEM_INPUT
     }
 
     private final Type type;

@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import cn.cloudgift.gift.RewardDefinition;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -27,5 +28,15 @@ class GiftDraftTest {
 
         draft.commitTemporaryItems();
         assertTrue(draft.temporaryItemIds().isEmpty());
+    }
+
+    @Test
+    void reportsRemainingRewardCapacity() {
+        GiftDraft draft = GiftDraft.fresh("starter");
+
+        assertEquals(45, draft.remainingRewardCapacity(45));
+        draft.rewards().add(new RewardDefinition.CommandReward("say hello"));
+        assertEquals(44, draft.remainingRewardCapacity(45));
+        assertEquals(0, draft.remainingRewardCapacity(0));
     }
 }
