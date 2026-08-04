@@ -6,11 +6,11 @@ import java.io.File;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.DatabaseMetaData;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.OptionalLong;
 import java.util.UUID;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -30,6 +30,7 @@ public final class JdbcClaimRepository implements ClaimRepository {
         this.dataSource = new HikariDataSource(createPoolConfig(plugin, config));
         try {
             createTable(config.getString("storage.type", "sqlite"));
+            migrateClaimCount();
         } catch (SQLException | RuntimeException exception) {
             dataSource.close();
             throw exception;
@@ -37,37 +38,42 @@ public final class JdbcClaimRepository implements ClaimRepository {
     }
 
     @Override
-    public ClaimAttempt attemptClaim(UUID playerId, String giftId, long cooldownMillis, long now)
+    public ClaimAttempt attemptClaim(UUID playerId, String giftId, long cooldownMillis, int maxClaims, long now)
             throws SQLException {
         long cutoff = now - Math.min(now, Math.max(0L, cooldownMillis));
+        // maxClaims <= 0 means unlimited; use a cap the counter can never reach.
+        long limit = maxClaims > 0 ? maxClaims : Long.MAX_VALUE;
         String token = UUID.randomUUID().toString();
 
         try (Connection connection = dataSource.getConnection()) {
             connection.setAutoCommit(false);
             try {
+                // The usage limit takes priority: only accept when the count is still below the
+                // limit AND the cooldown has elapsed. Both checks live in the same atomic UPDATE.
                 String updateSql = "UPDATE " + table
-                        + " SET last_claim = ?, claim_token = ?"
-                        + " WHERE player_uuid = ? AND gift_id = ? AND last_claim <= ?";
+                        + " SET last_claim = ?, claim_token = ?, claim_count = claim_count + 1"
+                        + " WHERE player_uuid = ? AND gift_id = ? AND claim_count < ? AND last_claim <= ?";
                 try (PreparedStatement statement = connection.prepareStatement(updateSql)) {
                     statement.setLong(1, now);
                     statement.setString(2, token);
                     statement.setString(3, playerId.toString());
                     statement.setString(4, giftId);
-                    statement.setLong(5, cutoff);
+                    statement.setLong(5, limit);
+                    statement.setLong(6, cutoff);
                     if (statement.executeUpdate() == 1) {
                         connection.commit();
-                        return ClaimAttempt.accepted(now);
+                        return ClaimAttempt.accepted(now, currentCount(connection, playerId, giftId));
                     }
                 }
 
-                OptionalLong existing = findLastClaim(connection, playerId, giftId);
-                if (existing.isPresent()) {
+                ClaimRecord existing = findRecord(connection, playerId, giftId);
+                if (existing != null) {
                     connection.commit();
-                    return ClaimAttempt.rejected(existing.getAsLong());
+                    return reject(existing, maxClaims);
                 }
 
                 String insertSql = "INSERT INTO " + table
-                        + " (player_uuid, gift_id, last_claim, claim_token) VALUES (?, ?, ?, ?)";
+                        + " (player_uuid, gift_id, last_claim, claim_token, claim_count) VALUES (?, ?, ?, ?, 1)";
                 try (PreparedStatement statement = connection.prepareStatement(insertSql)) {
                     statement.setString(1, playerId.toString());
                     statement.setString(2, giftId);
@@ -76,12 +82,12 @@ public final class JdbcClaimRepository implements ClaimRepository {
                     statement.executeUpdate();
                 }
                 connection.commit();
-                return ClaimAttempt.accepted(now);
+                return ClaimAttempt.accepted(now, 1);
             } catch (SQLException exception) {
                 connection.rollback();
-                OptionalLong winner = findLastClaim(connection, playerId, giftId);
-                if (winner.isPresent()) {
-                    return ClaimAttempt.rejected(winner.getAsLong());
+                ClaimRecord winner = findRecord(connection, playerId, giftId);
+                if (winner != null) {
+                    return reject(winner, maxClaims);
                 }
                 throw exception;
             } finally {
@@ -90,27 +96,35 @@ public final class JdbcClaimRepository implements ClaimRepository {
         }
     }
 
+    private ClaimAttempt reject(ClaimRecord record, int maxClaims) {
+        // Limit check first so a fully-used gift never reports a misleading cooldown.
+        if (maxClaims > 0 && record.claimCount() >= maxClaims) {
+            return ClaimAttempt.limitReached(record.lastClaimAt(), record.claimCount());
+        }
+        return ClaimAttempt.cooldown(record.lastClaimAt(), record.claimCount());
+    }
+
+    private int currentCount(Connection connection, UUID playerId, String giftId) throws SQLException {
+        ClaimRecord record = findRecord(connection, playerId, giftId);
+        return record == null ? 0 : record.claimCount();
+    }
+
     @Override
-    public Map<String, Long> loadClaims(UUID playerId) throws SQLException {
-        String sql = "SELECT gift_id, last_claim FROM " + table + " WHERE player_uuid = ?";
-        Map<String, Long> claims = new HashMap<>();
+    public Map<String, ClaimRecord> loadClaims(UUID playerId) throws SQLException {
+        String sql = "SELECT gift_id, last_claim, claim_count FROM " + table + " WHERE player_uuid = ?";
+        Map<String, ClaimRecord> claims = new HashMap<>();
         try (Connection connection = dataSource.getConnection();
                 PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, playerId.toString());
             try (ResultSet resultSet = statement.executeQuery()) {
                 while (resultSet.next()) {
-                    claims.put(resultSet.getString("gift_id"), resultSet.getLong("last_claim"));
+                    claims.put(
+                            resultSet.getString("gift_id"),
+                            new ClaimRecord(resultSet.getLong("last_claim"), resultSet.getInt("claim_count")));
                 }
             }
         }
         return claims;
-    }
-
-    @Override
-    public OptionalLong findLastClaim(UUID playerId, String giftId) throws SQLException {
-        try (Connection connection = dataSource.getConnection()) {
-            return findLastClaim(connection, playerId, giftId);
-        }
     }
 
     @Override
@@ -129,13 +143,15 @@ public final class JdbcClaimRepository implements ClaimRepository {
         dataSource.close();
     }
 
-    private OptionalLong findLastClaim(Connection connection, UUID playerId, String giftId) throws SQLException {
-        String sql = "SELECT last_claim FROM " + table + " WHERE player_uuid = ? AND gift_id = ?";
+    private ClaimRecord findRecord(Connection connection, UUID playerId, String giftId) throws SQLException {
+        String sql = "SELECT last_claim, claim_count FROM " + table + " WHERE player_uuid = ? AND gift_id = ?";
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, playerId.toString());
             statement.setString(2, giftId);
             try (ResultSet resultSet = statement.executeQuery()) {
-                return resultSet.next() ? OptionalLong.of(resultSet.getLong(1)) : OptionalLong.empty();
+                return resultSet.next()
+                        ? new ClaimRecord(resultSet.getLong(1), resultSet.getInt(2))
+                        : null;
             }
         }
     }
@@ -186,6 +202,7 @@ public final class JdbcClaimRepository implements ClaimRepository {
                     + "gift_id VARCHAR(128) NOT NULL,"
                     + "last_claim BIGINT NOT NULL,"
                     + "claim_token CHAR(36) NOT NULL,"
+                    + "claim_count INT NOT NULL DEFAULT 0,"
                     + "PRIMARY KEY (player_uuid, gift_id)"
                     + ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin";
         } else {
@@ -194,11 +211,39 @@ public final class JdbcClaimRepository implements ClaimRepository {
                     + "gift_id TEXT NOT NULL,"
                     + "last_claim INTEGER NOT NULL,"
                     + "claim_token TEXT NOT NULL,"
+                    + "claim_count INTEGER NOT NULL DEFAULT 0,"
                     + "PRIMARY KEY (player_uuid, gift_id)"
                     + ")";
         }
         try (Connection connection = dataSource.getConnection(); Statement statement = connection.createStatement()) {
             statement.executeUpdate(sql);
         }
+    }
+
+    /** Adds the claim_count column to tables created before usage limits existed. */
+    private void migrateClaimCount() throws SQLException {
+        try (Connection connection = dataSource.getConnection()) {
+            if (columnExists(connection, "claim_count")) {
+                return;
+            }
+            String sql = "ALTER TABLE " + table + " ADD COLUMN claim_count INTEGER NOT NULL DEFAULT 0";
+            try (Statement statement = connection.createStatement()) {
+                statement.executeUpdate(sql);
+            }
+        }
+    }
+
+    private boolean columnExists(Connection connection, String column) throws SQLException {
+        DatabaseMetaData metaData = connection.getMetaData();
+        for (String candidate : new String[] {table, table.toUpperCase(), table.toLowerCase()}) {
+            try (ResultSet columns = metaData.getColumns(connection.getCatalog(), null, candidate, null)) {
+                while (columns.next()) {
+                    if (column.equalsIgnoreCase(columns.getString("COLUMN_NAME"))) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 }

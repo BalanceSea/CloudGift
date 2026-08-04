@@ -1,8 +1,10 @@
+# 插件描述文件：Paper 1.21.11、Java 21；第三方运行库由 Paper 的 Library Loader 加载。
+# 修改命令、权限或 libraries 后需要重启服务端，作者与联系信息见 README.md。
 name: CloudGift
 version: '${project.version}'
 main: cn.cloudgift.CloudGiftPlugin
-api-version: '1.21.11'
-authors: [CloudGift]
+api-version: '1.21'
+authors: [MoutainSeaL]
 description: 支持共享数据库、权限与自定义冷却的礼包插件
 softdepend: [PlaceholderAPI]
 libraries:
@@ -17,7 +19,7 @@ commands:
     aliases: [libao, cgift]
   cloudgift:
     description: CloudGift 管理命令
-    usage: /cloudgift <reload|saveitem|list|claim|reset>
+    usage: /cloudgift <reload|saveitem|list|claim|reset|gui>
     aliases: [cloudgifts]
 
 permissions:

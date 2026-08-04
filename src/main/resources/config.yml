@@ -1,31 +1,33 @@
-# 存储类型：sqlite（单服）或 mysql（群组服推荐）
+# 存储类型：sqlite（单服）或 mysql（群组服推荐）；修改后需要重启服务器。
 storage:
-  type: sqlite
-  table-prefix: cloudgift_
+  type: sqlite # 允许值：sqlite、mysql；默认值：sqlite。
+  table-prefix: cloudgift_ # 数据表前缀，只能使用字母、数字和下划线。
   mysql:
-    host: 127.0.0.1
-    port: 3306
-    database: minecraft
-    username: root
-    password: change_me
-    parameters: useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+    host: 127.0.0.1 # MySQL/MariaDB 地址；默认值：127.0.0.1。
+    port: 3306 # 数据库端口；默认值：3306。
+    database: minecraft # 数据库名称，需提前创建。
+    username: root # 数据库账号，建议只授予 CloudGift 所需权限。
+    password: change_me # 数据库密码；生产环境请改为独立账号密码。
+    parameters: useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai # JDBC 参数。
   pool:
-    maximum-pool-size: 10
-    minimum-idle: 2
-    connection-timeout-ms: 5000
-    max-lifetime-ms: 1800000
+    maximum-pool-size: 10 # 连接池最大连接数，默认值：10。
+    minimum-idle: 2 # 最小空闲连接数，默认值：2。
+    connection-timeout-ms: 5000 # 获取连接超时时间，单位：毫秒。
+    max-lifetime-ms: 1800000 # 连接最大存活时间，单位：毫秒。
 
 # DateTimeFormatter 格式；参考 Java DateTimeFormatter 文档
 time:
-  pattern: yyyy-MM-dd HH:mm:ss
-  zone-id: Asia/Shanghai
+  pattern: yyyy-MM-dd HH:mm:ss # Java DateTimeFormatter 格式，默认值：yyyy-MM-dd HH:mm:ss。
+  zone-id: Asia/Shanghai # 时区 ID，默认值：Asia/Shanghai。
 
+# PlaceholderAPI 返回的文本；修改后执行 /cloudgift reload 即可生效。
 placeholder:
-  available-time: 可领取
-  no-permission-time: 无权限
-  unknown-gift: 未知礼包
-  loading-time: 数据加载中
+  available-time: 可领取 # 没有领取记录或冷却结束时返回。
+  no-permission-time: 无权限 # 玩家没有礼包权限时返回。
+  unknown-gift: 未知礼包 # 礼包 ID 不存在时返回。
+  loading-time: 数据加载中 # 玩家数据异步载入期间返回。
+  limit-reached-time: 次数已用尽 # 达到 max-claims 时返回。
 
 # 玩家进入服务器时会异步载入其领取记录，供 PAPI 无阻塞读取。
 data:
-  preload-on-join: true
+  preload-on-join: true # 是否在玩家进入时预加载记录；默认值：true。

@@ -5,6 +5,7 @@ import cn.cloudgift.gift.GiftDefinition;
 import cn.cloudgift.gift.GiftRegistry;
 import cn.cloudgift.service.ClaimService;
 import java.util.Locale;
+import java.util.OptionalInt;
 import java.util.OptionalLong;
 import me.clip.placeholderapi.expansion.PlaceholderExpansion;
 import org.bukkit.entity.Player;
@@ -77,12 +78,44 @@ public final class CloudGiftExpansion extends PlaceholderExpansion {
                 claims.ensurePreloaded(player);
                 return settings.loadingTime();
             }
+            OptionalInt count = claims.cachedClaimCount(player.getUniqueId(), gift.id());
+            // Usage limit takes priority over the cooldown display.
+            if (count.isPresent() && gift.limitReached(count.getAsInt())) {
+                return settings.limitReachedTime();
+            }
             OptionalLong lastClaim = claims.cachedLastClaim(player.getUniqueId(), gift.id());
             if (lastClaim.isEmpty()) {
                 return settings.availableTime();
             }
             long next = gift.nextClaimAt(lastClaim.getAsLong());
             return next <= System.currentTimeMillis() ? settings.availableTime() : settings.format(next);
+        }
+        if (normalized.startsWith("used_")) {
+            String giftId = normalized.substring("used_".length());
+            if (gifts.find(giftId).isEmpty()) {
+                return settings.unknownGift();
+            }
+            return Integer.toString(claims.cachedClaimCount(player.getUniqueId(), giftId).orElse(0));
+        }
+        if (normalized.startsWith("limit_")) {
+            String giftId = normalized.substring("limit_".length());
+            GiftDefinition gift = gifts.find(giftId).orElse(null);
+            if (gift == null) {
+                return settings.unknownGift();
+            }
+            return gift.hasClaimLimit() ? Integer.toString(gift.maxClaims()) : "∞";
+        }
+        if (normalized.startsWith("remaining_")) {
+            String giftId = normalized.substring("remaining_".length());
+            GiftDefinition gift = gifts.find(giftId).orElse(null);
+            if (gift == null) {
+                return settings.unknownGift();
+            }
+            if (!gift.hasClaimLimit()) {
+                return "∞";
+            }
+            int used = claims.cachedClaimCount(player.getUniqueId(), giftId).orElse(0);
+            return Integer.toString(Math.max(0, gift.maxClaims() - used));
         }
         return null;
     }

@@ -1,0 +1,15 @@
+# 新手礼包示例：每个 YAML 文件可以只维护一个或多个礼包。
+# 修改后执行 /cloudgift reload；礼包 ID 必须在整个 gifts 目录内保持唯一。
+gifts:
+  novice:
+    # 显示名称支持 MiniMessage 格式。
+    display-name: '<green>新手礼包'
+    # 留空表示不额外要求权限。
+    permission: ''
+    # 冷却时间单位为小时，默认值：24；0 表示领取后可以立即再次领取。
+    cooldown-hours: 24
+    # 累计领取次数上限，0 表示无限。
+    max-claims: 1
+    rewards:
+      - type: command
+        command: 'xp add %player% 5 levels'

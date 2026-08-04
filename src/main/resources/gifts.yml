@@ -1,22 +1,36 @@
-# 所有礼包可以放在本文件，也可以拆分到 plugins/CloudGift/gifts/*.yml。
-# 多文件仍使用相同的 gifts: 顶层结构，礼包 ID 在所有文件中必须唯一。
+# 礼包配置入口：旧版本可以继续使用本文件；推荐把礼包拆分到 plugins/CloudGift/gifts/ 下。
+# gifts/ 目录会递归读取所有 .yml 和 .yaml 文件，文件名可以自定义，修改后执行 /cloudgift reload。
+# 目录中的礼包优先于本文件；同一个礼包 ID 只能生效一次，重复 ID 会保留目录中先读取的定义。
+# 每个拆分文件都使用下面的 gifts: 顶层结构，文件夹不存在时插件会自动创建。
 gifts:
   novice:
+    # 显示名称支持 MiniMessage 格式，例如 <green>新手礼包。
     display-name: '<green>新手礼包'
+    # 领取所需权限；留空表示所有拥有领取命令权限的玩家都可以领取。
     permission: ''
+    # 两次成功领取之间的冷却时间，单位：小时；允许 0，默认值：24。
     cooldown-hours: 24
+    # 每位玩家累计可领取的总次数；0 表示不限次数，次数上限优先于冷却时间。
+    max-claims: 1
+    # 奖励按列表顺序发放；command 执行控制台命令，item 引用 items.yml 中保存的物品。
     rewards:
       - type: command
         command: 'xp add %player% 5 levels'
 
   monthly:
+    # 显示名称支持 MiniMessage 格式。
     display-name: '<gold>月卡礼包'
+    # 领取所需权限；留空表示不额外要求权限。
     permission: cloudgift.gift.monthly
+    # 冷却时间单位为小时，默认值：24。
     cooldown-hours: 24
+    # 累计领取次数上限；0 表示无限。
+    max-claims: 0
+    # 奖励按列表顺序执行。
     rewards:
       - type: command
         command: 'give %player% diamond 3'
-      # 先执行 /cloudgift saveitem monthly_bonus 保存主手物品，再取消下方三行的注释：
+      # 先执行 /cloudgift saveitem monthly_bonus 保存主手物品，再取消下方三行的注释。
       # - type: item
       #   item: monthly_bonus
       #   amount: 1

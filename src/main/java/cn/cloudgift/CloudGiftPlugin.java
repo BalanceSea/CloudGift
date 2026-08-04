@@ -4,6 +4,9 @@ import cn.cloudgift.command.CloudGiftCommand;
 import cn.cloudgift.config.PluginSettings;
 import cn.cloudgift.gift.GiftRegistry;
 import cn.cloudgift.gift.ItemStore;
+import cn.cloudgift.gui.ChatInputService;
+import cn.cloudgift.gui.GiftEditorGui;
+import cn.cloudgift.gui.GiftMenuListener;
 import cn.cloudgift.listener.PlayerDataListener;
 import cn.cloudgift.message.MessageService;
 import cn.cloudgift.placeholder.CloudGiftExpansion;
@@ -12,6 +15,7 @@ import cn.cloudgift.service.RewardService;
 import cn.cloudgift.storage.ClaimRepository;
 import cn.cloudgift.storage.JdbcClaimRepository;
 import java.io.File;
+import java.io.IOException;
 import java.sql.SQLException;
 import org.bukkit.Bukkit;
 import org.bukkit.command.PluginCommand;
@@ -31,7 +35,7 @@ public final class CloudGiftPlugin extends JavaPlugin {
     public void onEnable() {
         saveDefaultConfig();
         saveResourceIfMissing("messages.yml");
-        saveResourceIfMissing("gifts.yml");
+        saveGiftDefaultsIfFreshInstall();
         saveResourceIfMissing("items.yml");
 
         settings = new PluginSettings(this);
@@ -39,6 +43,11 @@ public final class CloudGiftPlugin extends JavaPlugin {
         items = new ItemStore(this);
         items.reload();
         gifts = new GiftRegistry(this);
+        try {
+            gifts.ensureGiftDirectory();
+        } catch (IOException exception) {
+            getLogger().warning("礼包目录创建失败，仍会尝试读取根目录 gifts.yml: " + exception.getMessage());
+        }
         int giftCount = gifts.reload();
 
         try {
@@ -52,10 +61,15 @@ public final class CloudGiftPlugin extends JavaPlugin {
 
         RewardService rewards = new RewardService(this, items);
         claims = new ClaimService(this, gifts, repository, rewards, messages, settings);
-        CloudGiftCommand commandHandler = new CloudGiftCommand(this, gifts, items, claims, messages);
+
+        ChatInputService chatInput = new ChatInputService(this);
+        GiftEditorGui editorGui = new GiftEditorGui(this, gifts, items, messages, chatInput);
+        CloudGiftCommand commandHandler = new CloudGiftCommand(this, gifts, items, claims, messages, editorGui);
         registerCommand("gift", commandHandler);
         registerCommand("cloudgift", commandHandler);
         getServer().getPluginManager().registerEvents(new PlayerDataListener(claims, settings), this);
+        getServer().getPluginManager().registerEvents(chatInput, this);
+        getServer().getPluginManager().registerEvents(new GiftMenuListener(editorGui, gifts), this);
 
         if (getServer().getPluginManager().isPluginEnabled("PlaceholderAPI")) {
             expansion = new CloudGiftExpansion(this, gifts, claims, settings);
@@ -88,6 +102,11 @@ public final class CloudGiftPlugin extends JavaPlugin {
         settings.reload();
         messages.reload();
         items.reload();
+        try {
+            gifts.ensureGiftDirectory();
+        } catch (IOException exception) {
+            throw new IllegalStateException("礼包目录创建失败", exception);
+        }
         return gifts.reload();
     }
 
@@ -95,6 +114,16 @@ public final class CloudGiftPlugin extends JavaPlugin {
         if (!new File(getDataFolder(), name).isFile()) {
             saveResource(name, false);
         }
+    }
+
+    private void saveGiftDefaultsIfFreshInstall() {
+        File legacyFile = new File(getDataFolder(), "gifts.yml");
+        File directory = new File(getDataFolder(), "gifts");
+        if (legacyFile.isFile() || directory.exists()) {
+            return;
+        }
+        saveResourceIfMissing("gifts/novice.yml");
+        saveResourceIfMissing("gifts/monthly.yml");
     }
 
     private void registerCommand(String name, CloudGiftCommand handler) {

@@ -5,9 +5,11 @@ import cn.cloudgift.gift.GiftDefinition;
 import cn.cloudgift.gift.GiftRegistry;
 import cn.cloudgift.message.MessageService;
 import cn.cloudgift.storage.ClaimAttempt;
+import cn.cloudgift.storage.ClaimRecord;
 import cn.cloudgift.storage.ClaimRepository;
 import java.sql.SQLException;
 import java.util.Map;
+import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.UUID;
@@ -28,7 +30,7 @@ public final class ClaimService {
     private final RewardService rewardService;
     private final MessageService messages;
     private final PluginSettings settings;
-    private final Map<UUID, Map<String, Long>> cache = new ConcurrentHashMap<>();
+    private final Map<UUID, Map<String, ClaimRecord>> cache = new ConcurrentHashMap<>();
     private final Set<UUID> loaded = ConcurrentHashMap.newKeySet();
     private final Set<UUID> loading = ConcurrentHashMap.newKeySet();
     private final Set<ClaimKey> inFlight = ConcurrentHashMap.newKeySet();
@@ -70,7 +72,7 @@ public final class ClaimService {
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
                 ClaimAttempt attempt = repository.attemptClaim(
-                        player.getUniqueId(), gift.id(), gift.cooldownMillis(), requestedAt);
+                        player.getUniqueId(), gift.id(), gift.cooldownMillis(), gift.maxClaims(), requestedAt);
                 runOnMainThread(() -> finishClaim(player.getUniqueId(), gift, key, attempt));
             } catch (SQLException exception) {
                 plugin.getLogger().log(Level.SEVERE, "领取礼包时数据库操作失败", exception);
@@ -92,7 +94,7 @@ public final class ClaimService {
         }
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
-                Map<String, Long> claims = new ConcurrentHashMap<>(repository.loadClaims(playerId));
+                Map<String, ClaimRecord> claims = new ConcurrentHashMap<>(repository.loadClaims(playerId));
                 runOnMainThread(() -> {
                     loading.remove(playerId);
                     if (Bukkit.getPlayer(playerId) != null) {
@@ -125,12 +127,18 @@ public final class ClaimService {
     }
 
     public OptionalLong cachedLastClaim(UUID playerId, String giftId) {
-        Map<String, Long> claims = cache.get(playerId);
-        if (claims == null) {
-            return OptionalLong.empty();
-        }
-        Long value = claims.get(giftId);
-        return value == null ? OptionalLong.empty() : OptionalLong.of(value);
+        ClaimRecord record = cachedRecord(playerId, giftId);
+        return record == null ? OptionalLong.empty() : OptionalLong.of(record.lastClaimAt());
+    }
+
+    public OptionalInt cachedClaimCount(UUID playerId, String giftId) {
+        ClaimRecord record = cachedRecord(playerId, giftId);
+        return record == null ? OptionalInt.empty() : OptionalInt.of(record.claimCount());
+    }
+
+    private ClaimRecord cachedRecord(UUID playerId, String giftId) {
+        Map<String, ClaimRecord> claims = cache.get(playerId);
+        return claims == null ? null : claims.get(giftId);
     }
 
     public boolean canClaimCached(Player player, GiftDefinition gift, long now) {
@@ -141,8 +149,15 @@ public final class ClaimService {
             ensurePreloaded(player);
             return false;
         }
-        OptionalLong lastClaim = cachedLastClaim(player.getUniqueId(), gift.id());
-        return lastClaim.isEmpty() || gift.nextClaimAt(lastClaim.getAsLong()) <= now;
+        ClaimRecord record = cachedRecord(player.getUniqueId(), gift.id());
+        if (record == null) {
+            return true;
+        }
+        // Usage limit takes priority over the cooldown check.
+        if (gift.limitReached(record.claimCount())) {
+            return false;
+        }
+        return gift.nextClaimAt(record.lastClaimAt()) <= now;
     }
 
     public void reset(CommandSender sender, UUID playerId, String playerLabel, GiftDefinition gift) {
@@ -150,7 +165,7 @@ public final class ClaimService {
             try {
                 repository.reset(playerId, gift.id());
                 runOnMainThread(() -> {
-                    Map<String, Long> claims = cache.get(playerId);
+                    Map<String, ClaimRecord> claims = cache.get(playerId);
                     if (claims != null) {
                         claims.remove(gift.id());
                     }
@@ -180,9 +195,16 @@ public final class ClaimService {
             return;
         }
         cache.computeIfAbsent(playerId, ignored -> new ConcurrentHashMap<>())
-                .put(gift.id(), attempt.lastClaimAt());
+                .put(gift.id(), new ClaimRecord(attempt.lastClaimAt(), attempt.claimCount()));
         loaded.add(playerId);
 
+        if (attempt.status() == ClaimAttempt.Status.LIMIT_REACHED) {
+            messages.send(player, "limit-reached",
+                    giftDisplayName(gift),
+                    Placeholder.unparsed("limit", Integer.toString(gift.maxClaims())),
+                    Placeholder.unparsed("used", Integer.toString(attempt.claimCount())));
+            return;
+        }
         if (!attempt.accepted()) {
             long nextClaim = gift.nextClaimAt(attempt.lastClaimAt());
             messages.send(player, "cooldown",

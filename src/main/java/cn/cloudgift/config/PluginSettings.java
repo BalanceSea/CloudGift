@@ -16,6 +16,7 @@ public final class PluginSettings {
     private volatile String noPermissionTime;
     private volatile String unknownGift;
     private volatile String loadingTime;
+    private volatile String limitReachedTime;
     private volatile boolean preloadOnJoin;
 
     public PluginSettings(JavaPlugin plugin) {
@@ -43,6 +44,7 @@ public final class PluginSettings {
         noPermissionTime = config.getString("placeholder.no-permission-time", "无权限");
         unknownGift = config.getString("placeholder.unknown-gift", "未知礼包");
         loadingTime = config.getString("placeholder.loading-time", "数据加载中");
+        limitReachedTime = config.getString("placeholder.limit-reached-time", "次数已用尽");
         preloadOnJoin = config.getBoolean("data.preload-on-join", true);
     }
 
@@ -68,6 +70,10 @@ public final class PluginSettings {
 
     public String loadingTime() {
         return loadingTime;
+    }
+
+    public String limitReachedTime() {
+        return limitReachedTime;
     }
 
     public boolean preloadOnJoin() {

@@ -4,6 +4,7 @@ import cn.cloudgift.CloudGiftPlugin;
 import cn.cloudgift.gift.GiftDefinition;
 import cn.cloudgift.gift.GiftRegistry;
 import cn.cloudgift.gift.ItemStore;
+import cn.cloudgift.gui.GiftEditorGui;
 import cn.cloudgift.message.MessageService;
 import cn.cloudgift.service.ClaimService;
 import java.io.IOException;
@@ -26,25 +27,29 @@ import org.jetbrains.annotations.Nullable;
 
 public final class CloudGiftCommand implements CommandExecutor, TabCompleter {
 
-    private static final List<String> ADMIN_SUBCOMMANDS = List.of("reload", "saveitem", "list", "claim", "reset");
+    private static final List<String> ADMIN_SUBCOMMANDS =
+            List.of("reload", "saveitem", "list", "claim", "reset", "gui");
 
     private final CloudGiftPlugin plugin;
     private final GiftRegistry gifts;
     private final ItemStore items;
     private final ClaimService claims;
     private final MessageService messages;
+    private final GiftEditorGui editorGui;
 
     public CloudGiftCommand(
             CloudGiftPlugin plugin,
             GiftRegistry gifts,
             ItemStore items,
             ClaimService claims,
-            MessageService messages) {
+            MessageService messages,
+            GiftEditorGui editorGui) {
         this.plugin = plugin;
         this.gifts = gifts;
         this.items = items;
         this.claims = claims;
         this.messages = messages;
+        this.editorGui = editorGui;
     }
 
     @Override
@@ -103,6 +108,7 @@ public final class CloudGiftCommand implements CommandExecutor, TabCompleter {
             case "saveitem" -> saveItem(sender, args);
             case "list" -> list(sender);
             case "reset" -> reset(sender, args);
+            case "gui", "editor" -> openGui(sender);
             default -> {
                 messages.send(sender, "usage-admin");
                 yield true;
@@ -183,6 +189,15 @@ public final class CloudGiftCommand implements CommandExecutor, TabCompleter {
             }
         }
         claims.reset(sender, playerId, playerLabel, gift);
+        return true;
+    }
+
+    private boolean openGui(CommandSender sender) {
+        if (!(sender instanceof Player player)) {
+            messages.send(sender, "players-only");
+            return true;
+        }
+        editorGui.openList(player);
         return true;
     }
 

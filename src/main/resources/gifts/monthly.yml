@@ -1,0 +1,16 @@
+# 月卡礼包示例：可以继续在 gifts 目录中创建更多 .yml 或 .yaml 文件。
+# 修改后执行 /cloudgift reload；不要在不同文件中使用相同的礼包 ID。
+gifts:
+  monthly:
+    # 显示名称支持 MiniMessage 格式。
+    display-name: '<gold>月卡礼包'
+    # 领取所需权限；留空表示不额外要求权限。
+    permission: cloudgift.gift.monthly
+    # 冷却时间单位为小时，默认值：24。
+    cooldown-hours: 24
+    # 累计领取次数上限；0 表示无限。
+    max-claims: 0
+    # 奖励按列表顺序执行。
+    rewards:
+      - type: command
+        command: 'give %player% diamond 3'
