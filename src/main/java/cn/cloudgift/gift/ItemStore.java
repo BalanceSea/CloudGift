@@ -4,8 +4,12 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.Logger;
+import java.util.regex.Pattern;
 import org.bukkit.Material;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -14,19 +18,24 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 public final class ItemStore {
 
-    private static final String ID_PATTERN = "[a-z0-9_-]+";
+    private static final Pattern ID_PATTERN = Pattern.compile("[a-z0-9_-]+");
+    private static final String GUI_ITEM_PREFIX = "__cloudgift_gui_";
 
-    private final JavaPlugin plugin;
     private final File file;
+    private final Logger logger;
     private final Map<String, ItemStack> items = new ConcurrentHashMap<>();
     private YamlConfiguration yaml;
 
     public ItemStore(JavaPlugin plugin) {
-        this.plugin = plugin;
-        this.file = new File(plugin.getDataFolder(), "items.yml");
+        this(plugin.getDataFolder(), plugin.getLogger());
     }
 
-    public void reload() {
+    ItemStore(File dataFolder, Logger logger) {
+        this.file = new File(Objects.requireNonNull(dataFolder, "dataFolder"), "items.yml");
+        this.logger = Objects.requireNonNull(logger, "logger");
+    }
+
+    public synchronized void reload() {
         yaml = YamlConfiguration.loadConfiguration(file);
         items.clear();
         ConfigurationSection root = yaml.getConfigurationSection("items");
@@ -38,28 +47,69 @@ public final class ItemStore {
             if (item != null && item.getType() != Material.AIR) {
                 items.put(key.toLowerCase(Locale.ROOT), item.clone());
             } else {
-                plugin.getLogger().warning("无法读取保存物品: " + key);
+                logger.warning("无法读取保存物品: " + key);
             }
         }
     }
 
     public boolean isValidId(String id) {
-        return id != null && id.toLowerCase(Locale.ROOT).matches(ID_PATTERN);
+        return id != null && ID_PATTERN.matcher(id.toLowerCase(Locale.ROOT)).matches();
     }
 
-    public void save(String id, ItemStack item) throws IOException {
-        String normalized = id.toLowerCase(Locale.ROOT);
-        if (!isValidId(normalized)) {
+    public synchronized void save(String id, ItemStack item) throws IOException {
+        if (!isValidId(id)) {
             throw new IllegalArgumentException("Invalid item id");
         }
+        String normalized = id.toLowerCase(Locale.ROOT);
+        if (item == null || item.getType() == Material.AIR || item.getAmount() <= 0) {
+            throw new IllegalArgumentException("Item cannot be empty");
+        }
+        ensureLoaded();
         ItemStack copy = item.clone();
         yaml.set("items." + normalized, copy);
         yaml.save(file);
         items.put(normalized, copy);
     }
 
+    public synchronized boolean delete(String id) throws IOException {
+        if (!isValidId(id)) {
+            return false;
+        }
+        ensureLoaded();
+        String normalized = id.toLowerCase(Locale.ROOT);
+        if (!items.containsKey(normalized) && !yaml.contains("items." + normalized)) {
+            return false;
+        }
+        yaml.set("items." + normalized, null);
+        yaml.save(file);
+        items.remove(normalized);
+        return true;
+    }
+
+    public String nextGuiItemId(String giftId) {
+        String normalizedGiftId = giftId == null ? "gift" : giftId.toLowerCase(Locale.ROOT);
+        if (!isValidId(normalizedGiftId)) {
+            normalizedGiftId = "gift";
+        }
+        String candidate;
+        do {
+            String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+            candidate = GUI_ITEM_PREFIX + normalizedGiftId + "_" + suffix;
+        } while (items.containsKey(candidate));
+        return candidate;
+    }
+
     public Optional<ItemStack> find(String id) {
+        if (id == null) {
+            return Optional.empty();
+        }
         ItemStack item = items.get(id.toLowerCase(Locale.ROOT));
         return item == null ? Optional.empty() : Optional.of(item.clone());
+    }
+
+    private void ensureLoaded() {
+        if (yaml == null) {
+            reload();
+        }
     }
 }

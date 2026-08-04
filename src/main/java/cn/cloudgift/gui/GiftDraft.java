@@ -3,7 +3,9 @@ package cn.cloudgift.gui;
 import cn.cloudgift.gift.GiftDefinition;
 import cn.cloudgift.gift.RewardDefinition;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 /** Mutable editing state for a single gift, manipulated by the GUI and then persisted. */
 public final class GiftDraft {
@@ -15,6 +17,7 @@ public final class GiftDraft {
     private long cooldownMillis;
     private int maxClaims;
     private final List<RewardDefinition> rewards;
+    private final Set<String> temporaryItemIds = new LinkedHashSet<>();
 
     private GiftDraft(String id, boolean existing, String displayName, String permission,
             long cooldownMillis, int maxClaims, List<RewardDefinition> rewards) {
@@ -90,5 +93,27 @@ public final class GiftDraft {
 
     public List<RewardDefinition> rewards() {
         return rewards;
+    }
+
+    public void trackTemporaryItem(String itemId) {
+        if (itemId != null && !itemId.isBlank()) {
+            temporaryItemIds.add(itemId);
+        }
+    }
+
+    public boolean isTemporaryItem(String itemId) {
+        return temporaryItemIds.contains(itemId);
+    }
+
+    public List<String> temporaryItemIds() {
+        return List.copyOf(temporaryItemIds);
+    }
+
+    public void releaseTemporaryItem(String itemId) {
+        temporaryItemIds.remove(itemId);
+    }
+
+    public void commitTemporaryItems() {
+        temporaryItemIds.clear();
     }
 }

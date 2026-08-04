@@ -12,6 +12,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.Level;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
@@ -25,6 +26,8 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 /** Builds and manages the in-game gift editor menus. */
 public final class GiftEditorGui {
+
+    static final int MAX_REWARDS = 45;
 
     private final JavaPlugin plugin;
     private final GiftRegistry gifts;
@@ -50,6 +53,7 @@ public final class GiftEditorGui {
     // === List menu ===
 
     public void openList(Player player) {
+        clearDraft(player.getUniqueId());
         GiftMenuHolder holder = new GiftMenuHolder(GiftMenuHolder.Type.LIST, player);
         Inventory inventory = Bukkit.createInventory(holder, 54, Component.text("礼包编辑器"));
         holder.setInventory(inventory);
@@ -124,12 +128,12 @@ public final class GiftEditorGui {
     static final int SLOT_DELETE = 50;
 
     public void openEditFor(Player player, GiftDefinition gift) {
-        drafts.put(player.getUniqueId(), GiftDraft.of(gift));
+        replaceDraft(player.getUniqueId(), GiftDraft.of(gift));
         openEdit(player);
     }
 
     public void beginNew(Player player, String id) {
-        drafts.put(player.getUniqueId(), GiftDraft.fresh(id));
+        replaceDraft(player.getUniqueId(), GiftDraft.fresh(id));
         openEdit(player);
     }
 
@@ -138,7 +142,8 @@ public final class GiftEditorGui {
     }
 
     public void clearDraft(UUID playerId) {
-        drafts.remove(playerId);
+        GiftDraft removed = drafts.remove(playerId);
+        cleanupTemporaryItems(removed);
     }
 
     public void openEdit(Player player) {
@@ -167,7 +172,7 @@ public final class GiftEditorGui {
                 List.of("<gray>共 <white>" + draft.rewards().size() + "</white> 项奖励", "", "<yellow>点击查看/编辑")));
         inventory.setItem(SLOT_BACK, button(Material.ARROW, "<gray>返回列表", "<dark_gray>放弃未保存的更改"));
         inventory.setItem(SLOT_SAVE, button(Material.LIME_DYE, "<green>保存",
-                List.of("<gray>写入 gifts.yml 并重载")));
+                List.of("<gray>写入礼包所属 YAML 并重载")));
         if (draft.existing()) {
             inventory.setItem(SLOT_DELETE, button(Material.LAVA_BUCKET, "<red>删除礼包",
                     List.of("<gray>Shift + 左键 确认删除")));
@@ -192,13 +197,16 @@ public final class GiftEditorGui {
         holder.setInventory(inventory);
 
         List<RewardDefinition> rewards = draft.rewards();
-        for (int i = 0; i < rewards.size() && i < 45; i++) {
+        for (int i = 0; i < rewards.size() && i < MAX_REWARDS; i++) {
             inventory.setItem(i, rewardIcon(rewards.get(i)));
         }
         inventory.setItem(SLOT_ADD_COMMAND, button(Material.COMMAND_BLOCK, "<green>添加命令奖励",
                 List.of("<gray>点击后输入命令", "<dark_gray>可用 %player% %uuid% %gift%")));
         inventory.setItem(SLOT_ADD_ITEM, button(Material.ITEM_FRAME, "<green>添加物品奖励",
-                List.of("<gray>点击后输入: <white>物品ID 数量", "<dark_gray>物品需先用 add 保存")));
+                List.of("<gray>把光标物品放到空奖励格",
+                        "<gray>或 Shift 点击背包物品",
+                        "<dark_gray>只复制模板，不消耗原物品",
+                        "<yellow>空手点击可输入已有物品 ID")));
         inventory.setItem(SLOT_REWARDS_BACK, button(Material.ARROW, "<gray>返回编辑", List.of()));
         player.openInventory(inventory);
     }
@@ -209,9 +217,90 @@ public final class GiftEditorGui {
                     List.of("<gray>" + commandReward.command(), "", "<red>Shift + 左键 删除"));
         }
         RewardDefinition.ItemReward itemReward = (RewardDefinition.ItemReward) reward;
-        return button(Material.CHEST_MINECART, "<yellow>物品奖励",
-                List.of("<gray>物品: <white>" + itemReward.itemId(),
-                        "<gray>数量: <white>" + itemReward.amount(), "", "<red>Shift + 左键 删除"));
+        ItemStack saved = items.find(itemReward.itemId()).orElse(null);
+        if (saved == null) {
+            return button(Material.CHEST_MINECART, "<red>物品奖励缺失",
+                    List.of("<gray>物品: <white>" + itemReward.itemId(),
+                            "<gray>数量: <white>" + itemReward.amount(), "", "<red>Shift + 左键 删除"));
+        }
+
+        int configuredAmount = itemReward.amount() < 0 ? saved.getAmount() : itemReward.amount();
+        saved.setAmount(Math.min(Math.max(1, configuredAmount), Math.max(1, saved.getMaxStackSize())));
+        ItemMeta meta = saved.getItemMeta();
+        if (meta != null) {
+            List<Component> lore = meta.lore() == null ? new ArrayList<>() : new ArrayList<>(meta.lore());
+            if (!lore.isEmpty()) {
+                lore.add(Component.empty());
+            }
+            lore.add(clean(messages.parse("<gray>奖励数量: <white>" + configuredAmount)));
+            lore.add(clean(messages.parse("<dark_gray>物品 ID: " + itemReward.itemId())));
+            lore.add(Component.empty());
+            lore.add(clean(messages.parse("<red>Shift + 左键 删除")));
+            meta.lore(lore);
+            saved.setItemMeta(meta);
+        }
+        return saved;
+    }
+
+    public void addDirectItem(Player player, ItemStack source) {
+        GiftDraft draft = drafts.get(player.getUniqueId());
+        if (draft == null || !isUsableItem(source)) {
+            return;
+        }
+        if (!hasRewardCapacity(player, draft)) {
+            return;
+        }
+
+        ItemStack copy = source.clone();
+        String itemId = items.nextGuiItemId(draft.id());
+        try {
+            items.save(itemId, copy);
+            draft.trackTemporaryItem(itemId);
+            draft.rewards().add(new RewardDefinition.ItemReward(itemId, copy.getAmount()));
+            messages.send(player, "gui-item-added", Map.of(
+                    "amount", Integer.toString(copy.getAmount()),
+                    "item", copy.getType().name().toLowerCase(Locale.ROOT)));
+            openRewards(player);
+        } catch (IOException | RuntimeException exception) {
+            plugin.getLogger().log(Level.SEVERE, "从礼包 GUI 保存物品失败", exception);
+            messages.send(player, "gui-item-add-failed");
+        }
+    }
+
+    public void addDirectItemNextTick(Player player, ItemStack source) {
+        ItemStack copy = source.clone();
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            if (player.isOnline()) {
+                addDirectItem(player, copy);
+            }
+        });
+    }
+
+    public void removeReward(Player player, int index) {
+        GiftDraft draft = drafts.get(player.getUniqueId());
+        if (draft == null || index < 0 || index >= draft.rewards().size()) {
+            return;
+        }
+        RewardDefinition removed = draft.rewards().remove(index);
+        if (removed instanceof RewardDefinition.ItemReward itemReward
+                && draft.isTemporaryItem(itemReward.itemId())) {
+            try {
+                items.delete(itemReward.itemId());
+                draft.releaseTemporaryItem(itemReward.itemId());
+            } catch (IOException exception) {
+                plugin.getLogger().log(Level.WARNING,
+                        "清理未保存的 GUI 物品失败: " + itemReward.itemId(), exception);
+                draft.rewards().add(index, removed);
+                messages.send(player, "gui-item-remove-failed");
+                openRewards(player);
+                return;
+            }
+        }
+        openRewards(player);
+    }
+
+    static boolean isUsableItem(ItemStack item) {
+        return item != null && item.getType() != Material.AIR && item.getAmount() > 0;
     }
 
     // === Persistence ===
@@ -223,6 +312,7 @@ public final class GiftEditorGui {
         }
         try {
             gifts.save(draft.toDefinition());
+            draft.commitTemporaryItems();
             drafts.remove(player.getUniqueId());
             messages.send(player, "gui-saved", Map.of("gift", draft.id()));
             openList(player);
@@ -239,7 +329,7 @@ public final class GiftEditorGui {
         }
         try {
             gifts.delete(draft.id());
-            drafts.remove(player.getUniqueId());
+            clearDraft(player.getUniqueId());
             messages.send(player, "gui-deleted", Map.of("gift", draft.id()));
             openList(player);
         } catch (IOException | RuntimeException exception) {
@@ -288,9 +378,13 @@ public final class GiftEditorGui {
     }
 
     public void promptAddCommand(Player player) {
+        GiftDraft currentDraft = drafts.get(player.getUniqueId());
+        if (currentDraft == null || !hasRewardCapacity(player, currentDraft)) {
+            return;
+        }
         promptText(player, "gui-prompt-command", value -> {
             GiftDraft draft = drafts.get(player.getUniqueId());
-            if (draft != null && !value.isBlank()) {
+            if (draft != null && !value.isBlank() && hasRewardCapacity(player, draft)) {
                 draft.rewards().add(new RewardDefinition.CommandReward(value));
             }
             openRewards(player);
@@ -298,9 +392,17 @@ public final class GiftEditorGui {
     }
 
     public void promptAddItem(Player player) {
+        GiftDraft currentDraft = drafts.get(player.getUniqueId());
+        if (currentDraft == null || !hasRewardCapacity(player, currentDraft)) {
+            return;
+        }
         promptText(player, "gui-prompt-item", value -> {
             GiftDraft draft = drafts.get(player.getUniqueId());
             if (draft == null) {
+                return;
+            }
+            if (!hasRewardCapacity(player, draft)) {
+                openRewards(player);
                 return;
             }
             String[] parts = value.trim().split("\\s+");
@@ -328,5 +430,38 @@ public final class GiftEditorGui {
         player.closeInventory();
         messages.send(player, promptMessage);
         chatInput.await(player, callback);
+    }
+
+    public void shutdown() {
+        List<GiftDraft> activeDrafts = List.copyOf(drafts.values());
+        drafts.clear();
+        activeDrafts.forEach(this::cleanupTemporaryItems);
+    }
+
+    private void replaceDraft(UUID playerId, GiftDraft replacement) {
+        GiftDraft previous = drafts.put(playerId, replacement);
+        cleanupTemporaryItems(previous);
+    }
+
+    private void cleanupTemporaryItems(GiftDraft draft) {
+        if (draft == null) {
+            return;
+        }
+        for (String itemId : draft.temporaryItemIds()) {
+            try {
+                items.delete(itemId);
+                draft.releaseTemporaryItem(itemId);
+            } catch (IOException exception) {
+                plugin.getLogger().log(Level.WARNING, "清理未保存的 GUI 物品失败: " + itemId, exception);
+            }
+        }
+    }
+
+    private boolean hasRewardCapacity(Player player, GiftDraft draft) {
+        if (draft.rewards().size() < MAX_REWARDS) {
+            return true;
+        }
+        messages.send(player, "gui-rewards-full");
+        return false;
     }
 }

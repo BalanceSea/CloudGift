@@ -31,6 +31,10 @@ gui-prompt-item: '<yellow>请输入：<white>物品ID 数量</white>，输入 ca
 gui-invalid-id: '<red>礼包 ID 无效，只能包含小写字母、数字、下划线和连字符。'
 gui-duplicate-id: '<red>礼包 ID <white><gift></white> 已存在。'
 gui-item-missing: '<red>未找到已保存的物品 <white><item></white>，请先用 /cloudgift add 保存。'
+gui-item-added: '<green>已复制 <white><item></white> ×<white><amount></white> 为礼包奖励，原物品未消耗。'
+gui-item-add-failed: '<red>从 GUI 保存物品奖励失败，请查看控制台日志。'
+gui-item-remove-failed: '<red>移除物品奖励失败，原奖励已保留，请查看控制台日志。'
+gui-rewards-full: '<red>该礼包已有 45 项奖励，请先删除一项再添加。'
 
 # 命令帮助和参数错误消息。命令模块只引用这里的键，修改后执行 /cloudgift reload 即可生效。
 help:

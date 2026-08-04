@@ -1,10 +1,10 @@
 # CloudGift
 
-CloudGift 1.2.0 是面向 Paper 1.21.11（Java 21）的礼包插件。它支持权限礼包、自定义领取冷却、累计领取次数、保存玩家主手物品、控制台命令奖励、PlaceholderAPI，以及适合群组服的 MySQL/MariaDB 共享存储。
+CloudGift 1.3.0 是面向 Paper 1.21.11（Java 21）的礼包插件。它支持权限礼包、自定义领取冷却、累计领取次数、GUI 直接添加物品、控制台命令奖励、PlaceholderAPI，以及适合群组服的 MySQL/MariaDB 共享存储。
 
 ## 安装
 
-1. 将 `CloudGift-1.2.0.jar` 放入服务端的 `plugins` 目录。
+1. 将 `CloudGift-1.3.0.jar` 放入服务端的 `plugins` 目录。
 2. 如需变量功能，安装 PlaceholderAPI。
 3. 启动一次服务端，修改 `plugins/CloudGift/config.yml`、`messages.yml` 和礼包文件。
 4. 执行 `/cloudgift reload` 重载礼包、物品、消息、时间格式等配置。数据库连接设置变更后需要重启服务端。
@@ -72,6 +72,14 @@ gifts:
 
 物品会保存至 `items.yml`，礼包奖励通过物品 ID 引用它。
 
+也可以执行 `/cloudgift menu` 打开礼包编辑器，在“奖励列表”中直接添加背包物品：
+
+- 把物品拿到光标后，点击任意空奖励格或“添加物品奖励”按钮。
+- Shift 点击背包物品，可直接复制整组物品为奖励。
+- 空奖励格支持数字键、副手交换键和单槽拖入。
+
+GUI 只复制物品模板，不会扣除管理员背包中的原物品。物品名称、Lore、附魔和组件会完整写入 `items.yml`，插件会自动生成 `__cloudgift_gui_` 开头的内部物品 ID。空手点击“添加物品奖励”仍可输入已有物品 ID。
+
 ## PlaceholderAPI 变量
 
 把 `<礼包ID>` 换成实际 ID，例如 `monthly`：
@@ -131,7 +139,7 @@ storage:
 mvn clean package
 ```
 
-构建产物位于 `target/CloudGift-1.2.0.jar`。这是不包含数据库驱动的轻量 JAR；运行依赖声明在 `plugin.yml` 的 `libraries` 节点中。
+构建产物位于 `target/CloudGift-1.3.0.jar`。这是不包含数据库驱动的轻量 JAR；运行依赖声明在 `plugin.yml` 的 `libraries` 节点中。
 
 ## 联系方式
 

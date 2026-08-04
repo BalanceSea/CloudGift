@@ -1,6 +1,10 @@
 package cn.cloudgift.message;
 
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
@@ -25,8 +29,10 @@ public final class MessageService {
     }
 
     public void reload() {
-        messages = YamlConfiguration.loadConfiguration(file);
-        prefix = miniMessage.deserialize(messages.getString("prefix", ""));
+        YamlConfiguration loaded = YamlConfiguration.loadConfiguration(file);
+        loaded.setDefaults(loadBundledDefaults());
+        messages = loaded;
+        prefix = miniMessage.deserialize(loaded.getString("prefix", ""));
     }
 
     public void send(CommandSender sender, String key) {
@@ -48,5 +54,19 @@ public final class MessageService {
 
     public Component parse(String miniMessageText) {
         return miniMessage.deserialize(miniMessageText);
+    }
+
+    private YamlConfiguration loadBundledDefaults() {
+        InputStream stream = plugin.getResource("messages.yml");
+        if (stream == null) {
+            plugin.getLogger().warning("插件 JAR 中缺少 messages.yml，消息回退不可用。");
+            return new YamlConfiguration();
+        }
+        try (InputStreamReader reader = new InputStreamReader(stream, StandardCharsets.UTF_8)) {
+            return YamlConfiguration.loadConfiguration(reader);
+        } catch (IOException exception) {
+            plugin.getLogger().warning("读取内置 messages.yml 失败: " + exception.getMessage());
+            return new YamlConfiguration();
+        }
     }
 }

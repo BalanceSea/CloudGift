@@ -1,2 +1,4 @@
 # 使用 /cloudgift add <物品ID> 保存主手物品后，本文件会自动写入物品数据。
+# 在礼包奖励 GUI 中直接放入物品时，会自动生成 __cloudgift_gui_ 开头的内部物品 ID。
+# 修改已有条目后执行 /cloudgift reload 生效；不要删除仍被礼包 YAML 引用的物品。
 items: {}

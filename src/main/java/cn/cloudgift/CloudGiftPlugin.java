@@ -31,6 +31,7 @@ public final class CloudGiftPlugin extends JavaPlugin {
     private ItemStore items;
     private ClaimRepository repository;
     private ClaimService claims;
+    private GiftEditorGui editorGui;
     private CloudGiftExpansion expansion;
 
     @Override
@@ -65,7 +66,7 @@ public final class CloudGiftPlugin extends JavaPlugin {
         claims = new ClaimService(this, gifts, repository, rewards, messages, settings);
 
         ChatInputService chatInput = new ChatInputService(this);
-        GiftEditorGui editorGui = new GiftEditorGui(this, gifts, items, messages, chatInput);
+        editorGui = new GiftEditorGui(this, gifts, items, messages, chatInput);
         CommandServices commandServices = new CommandServices(this, gifts, items, claims, messages, editorGui);
         GiftCommand giftCommand = new GiftCommand(commandServices);
         CloudGiftCommand cloudGiftCommand = new CloudGiftCommand(commandServices);
@@ -90,6 +91,9 @@ public final class CloudGiftPlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        if (editorGui != null) {
+            editorGui.shutdown();
+        }
         if (expansion != null) {
             expansion.unregister();
         }
