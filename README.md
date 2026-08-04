@@ -1,10 +1,10 @@
 # CloudGift
 
-CloudGift 1.1.0 是面向 Paper 1.21.11（Java 21）的礼包插件。它支持权限礼包、自定义领取冷却、累计领取次数、保存玩家主手物品、控制台命令奖励、PlaceholderAPI，以及适合群组服的 MySQL/MariaDB 共享存储。
+CloudGift 1.2.0 是面向 Paper 1.21.11（Java 21）的礼包插件。它支持权限礼包、自定义领取冷却、累计领取次数、保存玩家主手物品、控制台命令奖励、PlaceholderAPI，以及适合群组服的 MySQL/MariaDB 共享存储。
 
 ## 安装
 
-1. 将 `CloudGift-1.1.0.jar` 放入服务端的 `plugins` 目录。
+1. 将 `CloudGift-1.2.0.jar` 放入服务端的 `plugins` 目录。
 2. 如需变量功能，安装 PlaceholderAPI。
 3. 启动一次服务端，修改 `plugins/CloudGift/config.yml`、`messages.yml` 和礼包文件。
 4. 执行 `/cloudgift reload` 重载礼包、物品、消息、时间格式等配置。数据库连接设置变更后需要重启服务端。
@@ -19,11 +19,14 @@ Paper 1.21.11 使用 Java 21 或更新版本运行。本项目编译目标固定
 |---|---|---|
 | `/gift <礼包ID>` | `cloudgift.command.gift` | 领取礼包 |
 | `/cloudgift claim <礼包ID>` | `cloudgift.command.gift` | 领取礼包的另一种写法 |
-| `/cloudgift list` | `cloudgift.admin` | 查看已载入的礼包 |
-| `/cloudgift saveitem <物品ID>` | `cloudgift.admin` | 保存主手物品（含名称、附魔和组件等） |
-| `/cloudgift reset <在线玩家名或UUID> <礼包ID>` | `cloudgift.admin` | 清除领取记录 |
-| `/cloudgift reload` | `cloudgift.admin` | 重载配置 |
-| `/cloudgift gui` | `cloudgift.admin` | 打开礼包编辑 GUI |
+| `/cloudgift help` | 无 | 查看当前 sender 可用的命令 |
+| `/cloudgift list` | `cloudgift.command.list` | 查看已载入的礼包 |
+| `/cloudgift add <物品ID>` | `cloudgift.command.add` | 保存主手物品（含名称、附魔和组件等） |
+| `/cloudgift remove <在线玩家名或UUID> <礼包ID>` | `cloudgift.command.remove` | 清除领取记录 |
+| `/cloudgift reload` | `cloudgift.command.reload` | 重载配置 |
+| `/cloudgift menu` | `cloudgift.command.menu` | 打开礼包编辑 GUI |
+
+旧命令仍可使用：`saveitem` 是 `add` 的别名，`reset` 是 `remove` 的别名，`gui` 和 `editor` 是 `menu` 的别名。`cloudgift.admin` 通过子权限继承全部管理命令权限。
 
 每个礼包可单独填写权限，例如 `cloudgift.gift.monthly`。使用 LuckPerms 等权限插件，在玩家购买月卡后授予该权限即可：
 
@@ -37,7 +40,7 @@ Paper 1.21.11 使用 Java 21 或更新版本运行。本项目编译目标固定
 
 新安装默认会在 `plugins/CloudGift/gifts/` 生成 `novice.yml` 和 `monthly.yml`。礼包也可继续写在旧版的 `plugins/CloudGift/gifts.yml`，或拆分到该目录下任意层级的多个 `.yml` 或 `.yaml` 文件。插件启动时会自动创建 `gifts` 目录，修改文件后执行 `/cloudgift reload` 即可生效。
 
-目录内的文件优先于旧版根目录文件，适合逐步把礼包从一个大文件迁移到多个文件。每个文件使用相同的 `gifts:` 顶层结构；所有文件中的礼包 ID 必须唯一，只能使用小写字母、数字、下划线和连字符。通过 `/cloudgift gui` 新建的礼包会自动保存为 `gifts/<礼包ID>.yml`，已有礼包会写回它原本所在的文件。
+目录内的文件优先于旧版根目录文件，适合逐步把礼包从一个大文件迁移到多个文件。每个文件使用相同的 `gifts:` 顶层结构；所有文件中的礼包 ID 必须唯一，只能使用小写字母、数字、下划线和连字符。通过 `/cloudgift menu` 新建的礼包会自动保存为 `gifts/<礼包ID>.yml`，已有礼包会写回它原本所在的文件。
 
 ```yaml
 gifts:
@@ -64,7 +67,7 @@ gifts:
 先把物品拿在主手，再执行：
 
 ```text
-/cloudgift saveitem monthly_sword
+/cloudgift add monthly_sword
 ```
 
 物品会保存至 `items.yml`，礼包奖励通过物品 ID 引用它。
@@ -128,7 +131,7 @@ storage:
 mvn clean package
 ```
 
-构建产物位于 `target/CloudGift-1.1.0.jar`。这是不包含数据库驱动的轻量 JAR；运行依赖声明在 `plugin.yml` 的 `libraries` 节点中。
+构建产物位于 `target/CloudGift-1.2.0.jar`。这是不包含数据库驱动的轻量 JAR；运行依赖声明在 `plugin.yml` 的 `libraries` 节点中。
 
 ## 联系方式
 

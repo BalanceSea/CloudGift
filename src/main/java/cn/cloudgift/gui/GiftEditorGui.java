@@ -198,7 +198,7 @@ public final class GiftEditorGui {
         inventory.setItem(SLOT_ADD_COMMAND, button(Material.COMMAND_BLOCK, "<green>添加命令奖励",
                 List.of("<gray>点击后输入命令", "<dark_gray>可用 %player% %uuid% %gift%")));
         inventory.setItem(SLOT_ADD_ITEM, button(Material.ITEM_FRAME, "<green>添加物品奖励",
-                List.of("<gray>点击后输入: <white>物品ID 数量", "<dark_gray>物品需先用 saveitem 保存")));
+                List.of("<gray>点击后输入: <white>物品ID 数量", "<dark_gray>物品需先用 add 保存")));
         inventory.setItem(SLOT_REWARDS_BACK, button(Material.ARROW, "<gray>返回编辑", List.of()));
         player.openInventory(inventory);
     }

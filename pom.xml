@@ -6,7 +6,7 @@
 
     <groupId>cn.cloudgift</groupId>
     <artifactId>cloudgift</artifactId>
-    <version>1.1.0</version>
+    <version>1.2.0</version>
     <name>CloudGift</name>
     <description>A database-backed gift plugin for Paper networks.</description>
 

@@ -30,7 +30,7 @@ gifts:
     rewards:
       - type: command
         command: 'give %player% diamond 3'
-      # 先执行 /cloudgift saveitem monthly_bonus 保存主手物品，再取消下方三行的注释。
+      # 先执行 /cloudgift add monthly_bonus 保存主手物品，再取消下方三行的注释。
       # - type: item
       #   item: monthly_bonus
       #   amount: 1

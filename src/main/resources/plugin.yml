@@ -19,13 +19,34 @@ commands:
     aliases: [libao, cgift]
   cloudgift:
     description: CloudGift 管理命令
-    usage: /cloudgift <reload|saveitem|list|claim|reset|gui>
+    usage: /cloudgift <help|reload|menu|add|remove|claim|list>
     aliases: [cloudgifts]
 
 permissions:
   cloudgift.admin:
     description: 允许使用 CloudGift 的全部管理命令
     default: op
+    children:
+      cloudgift.command.reload: true
+      cloudgift.command.menu: true
+      cloudgift.command.add: true
+      cloudgift.command.remove: true
+      cloudgift.command.list: true
   cloudgift.command.gift:
     description: 允许使用礼包领取命令
     default: true
+  cloudgift.command.reload:
+    description: 允许重载 CloudGift 配置
+    default: op
+  cloudgift.command.menu:
+    description: 允许打开礼包编辑菜单
+    default: op
+  cloudgift.command.add:
+    description: 允许保存主手物品
+    default: op
+  cloudgift.command.remove:
+    description: 允许移除玩家礼包领取记录
+    default: op
+  cloudgift.command.list:
+    description: 允许查看已载入的礼包
+    default: op

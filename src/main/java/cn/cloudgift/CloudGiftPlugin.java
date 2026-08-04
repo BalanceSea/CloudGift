@@ -1,6 +1,8 @@
 package cn.cloudgift;
 
-import cn.cloudgift.command.CloudGiftCommand;
+import cn.cloudgift.command.common.CommandServices;
+import cn.cloudgift.command.root.CloudGiftCommand;
+import cn.cloudgift.command.root.GiftCommand;
 import cn.cloudgift.config.PluginSettings;
 import cn.cloudgift.gift.GiftRegistry;
 import cn.cloudgift.gift.ItemStore;
@@ -64,9 +66,11 @@ public final class CloudGiftPlugin extends JavaPlugin {
 
         ChatInputService chatInput = new ChatInputService(this);
         GiftEditorGui editorGui = new GiftEditorGui(this, gifts, items, messages, chatInput);
-        CloudGiftCommand commandHandler = new CloudGiftCommand(this, gifts, items, claims, messages, editorGui);
-        registerCommand("gift", commandHandler);
-        registerCommand("cloudgift", commandHandler);
+        CommandServices commandServices = new CommandServices(this, gifts, items, claims, messages, editorGui);
+        GiftCommand giftCommand = new GiftCommand(commandServices);
+        CloudGiftCommand cloudGiftCommand = new CloudGiftCommand(commandServices);
+        registerCommand("gift", giftCommand, giftCommand);
+        registerCommand("cloudgift", cloudGiftCommand, cloudGiftCommand);
         getServer().getPluginManager().registerEvents(new PlayerDataListener(claims, settings), this);
         getServer().getPluginManager().registerEvents(chatInput, this);
         getServer().getPluginManager().registerEvents(new GiftMenuListener(editorGui, gifts), this);
@@ -126,12 +130,15 @@ public final class CloudGiftPlugin extends JavaPlugin {
         saveResourceIfMissing("gifts/monthly.yml");
     }
 
-    private void registerCommand(String name, CloudGiftCommand handler) {
+    private void registerCommand(
+            String name,
+            org.bukkit.command.CommandExecutor executor,
+            org.bukkit.command.TabCompleter completer) {
         PluginCommand command = getCommand(name);
         if (command == null) {
             throw new IllegalStateException("plugin.yml 中缺少命令: " + name);
         }
-        command.setExecutor(handler);
-        command.setTabCompleter(handler);
+        command.setExecutor(executor);
+        command.setTabCompleter(completer);
     }
 }
