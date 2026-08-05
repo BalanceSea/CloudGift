@@ -8,6 +8,9 @@ gifts:
     permission: ''
     # 冷却时间单位为小时，默认值：24；0 表示领取后可以立即再次领取。
     cooldown-hours: 24
+    # 是否跨过下一自然日 00:00 后立即刷新；允许 true/false，默认 false。
+    # 开启时忽略 cooldown-hours，自然日使用 config.yml 的 time.zone-id；支持热重载。
+    reset-at-midnight: false
     # 累计领取次数上限，0 表示无限。
     max-claims: 1
     rewards:

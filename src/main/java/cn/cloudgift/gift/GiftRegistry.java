@@ -165,6 +165,7 @@ public final class GiftRegistry {
         yaml.set(base + ".display-name", gift.displayName());
         yaml.set(base + ".permission", gift.hasPermission() ? gift.permission() : "");
         yaml.set(base + ".cooldown-hours", gift.cooldownMillis() / 3_600_000.0D);
+        yaml.set(base + ".reset-at-midnight", gift.resetAtMidnight());
         yaml.set(base + ".max-claims", gift.maxClaims());
 
         List<Map<String, Object>> rewards = new ArrayList<>();
@@ -280,9 +281,11 @@ public final class GiftRegistry {
         }
         String permission = section.getString("permission", "");
         permission = permission == null ? "" : permission.trim();
+        boolean resetAtMidnight = section.getBoolean("reset-at-midnight", false);
         int maxClaims = Math.max(0, Math.min(MAX_CLAIMS, section.getInt("max-claims", 0)));
         List<RewardDefinition> rewards = parseRewards(id, section.getMapList("rewards"), source);
-        return new GiftDefinition(id, displayName, permission, cooldownMillis, maxClaims, rewards);
+        return new GiftDefinition(
+                id, displayName, permission, cooldownMillis, resetAtMidnight, maxClaims, rewards);
     }
 
     private List<RewardDefinition> parseRewards(String giftId, List<Map<?, ?>> maps, File source) {

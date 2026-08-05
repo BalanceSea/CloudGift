@@ -79,6 +79,7 @@ public final class GiftEditorGui {
         List<String> lore = new ArrayList<>();
         lore.add("<gray>ID: <white>" + gift.id());
         lore.add("<gray>冷却: <white>" + trim(gift.cooldownMillis() / 3_600_000.0D) + " 小时");
+        lore.add("<gray>刷新方式: <white>" + (gift.resetAtMidnight() ? "次日 00:00" : "精确冷却"));
         lore.add("<gray>次数上限: <white>" + (gift.hasClaimLimit() ? gift.maxClaims() : "无限"));
         lore.add("<gray>权限: <white>" + (gift.hasPermission() ? gift.permission() : "无"));
         lore.add("<gray>奖励数: <white>" + gift.rewards().size());
@@ -129,6 +130,7 @@ public final class GiftEditorGui {
     static final int SLOT_PERMISSION = 12;
     static final int SLOT_COOLDOWN = 14;
     static final int SLOT_MAXCLAIMS = 16;
+    static final int SLOT_RESET_AT_MIDNIGHT = 30;
     static final int SLOT_REWARDS = 22;
     static final int SLOT_BACK = 48;
     static final int SLOT_SAVE = 49;
@@ -175,6 +177,11 @@ public final class GiftEditorGui {
                 List.of("<gray>当前: <white>" + (draft.maxClaims() == 0 ? "无限（0）" : draft.maxClaims()),
                         "<dark_gray>次数上限优先于冷却时间",
                         "", "<yellow>左键 +1 / 右键 -1", "<yellow>Shift 左键 +10 / Shift 右键 -10")));
+        inventory.setItem(SLOT_RESET_AT_MIDNIGHT, button(Material.DAYLIGHT_DETECTOR, "<aqua>跨零点刷新",
+                List.of("<gray>当前: <white>" + (draft.resetAtMidnight() ? "开启" : "关闭"),
+                        "<gray>开启后进入下一自然日即可领取",
+                        "<dark_gray>开启时不再按冷却小时数等待",
+                        "", "<yellow>点击切换")));
         inventory.setItem(SLOT_REWARDS, button(Material.CHEST, "<aqua>奖励列表",
                 List.of("<gray>共 <white>" + draft.rewards().size() + "</white> 项奖励", "", "<yellow>点击查看/编辑")));
         inventory.setItem(SLOT_BACK, button(Material.ARROW, "<gray>返回列表", "<dark_gray>放弃未保存的更改"));

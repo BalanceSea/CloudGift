@@ -15,32 +15,35 @@ public final class GiftDraft {
     private String displayName;
     private String permission;
     private long cooldownMillis;
+    private boolean resetAtMidnight;
     private int maxClaims;
     private final List<RewardDefinition> rewards;
     private final Set<String> temporaryItemIds = new LinkedHashSet<>();
 
     private GiftDraft(String id, boolean existing, String displayName, String permission,
-            long cooldownMillis, int maxClaims, List<RewardDefinition> rewards) {
+            long cooldownMillis, boolean resetAtMidnight, int maxClaims, List<RewardDefinition> rewards) {
         this.id = id;
         this.existing = existing;
         this.displayName = displayName;
         this.permission = permission;
         this.cooldownMillis = cooldownMillis;
+        this.resetAtMidnight = resetAtMidnight;
         this.maxClaims = maxClaims;
         this.rewards = new ArrayList<>(rewards);
     }
 
     public static GiftDraft of(GiftDefinition gift) {
         return new GiftDraft(gift.id(), true, gift.displayName(), gift.permission(),
-                gift.cooldownMillis(), gift.maxClaims(), gift.rewards());
+                gift.cooldownMillis(), gift.resetAtMidnight(), gift.maxClaims(), gift.rewards());
     }
 
     public static GiftDraft fresh(String id) {
-        return new GiftDraft(id, false, id, "", 24L * 3_600_000L, 0, List.of());
+        return new GiftDraft(id, false, id, "", 24L * 3_600_000L, false, 0, List.of());
     }
 
     public GiftDefinition toDefinition() {
-        return new GiftDefinition(id, displayName, permission, cooldownMillis, maxClaims, rewards);
+        return new GiftDefinition(
+                id, displayName, permission, cooldownMillis, resetAtMidnight, maxClaims, rewards);
     }
 
     public String id() {
@@ -80,6 +83,14 @@ public final class GiftDraft {
         double hours = Math.max(0.0D, cooldownHours() + deltaHours);
         hours = Math.min(hours, 2_562_047_788.0D);
         this.cooldownMillis = Math.round(hours * 3_600_000.0D);
+    }
+
+    public boolean resetAtMidnight() {
+        return resetAtMidnight;
+    }
+
+    public void toggleResetAtMidnight() {
+        resetAtMidnight = !resetAtMidnight;
     }
 
     public int maxClaims() {

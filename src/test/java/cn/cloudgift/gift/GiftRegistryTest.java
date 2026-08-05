@@ -45,6 +45,7 @@ class GiftRegistryTest {
                   monthly:
                     display-name: Monthly
                     cooldown-hours: 24
+                    reset-at-midnight: true
                     rewards: []
                 """, StandardCharsets.UTF_8);
 
@@ -54,6 +55,8 @@ class GiftRegistryTest {
         assertTrue(registry.find("legacy").isPresent());
         assertTrue(registry.find("starter").isPresent());
         assertTrue(registry.find("monthly").isPresent());
+        assertTrue(registry.find("monthly").orElseThrow().resetAtMidnight());
+        assertFalse(registry.find("legacy").orElseThrow().resetAtMidnight());
         assertEquals("Modular shared", registry.find("shared").orElseThrow().displayName());
     }
 
@@ -61,13 +64,14 @@ class GiftRegistryTest {
     void savesNewGiftAsAnIndividualFileInsideGiftDirectory() throws IOException {
         GiftRegistry registry = new GiftRegistry(dataFolder.toFile(), Logger.getAnonymousLogger());
         GiftDefinition gift = new GiftDefinition(
-                "weekly", "Weekly", "", 3_600_000L, 0,
+                "weekly", "Weekly", "", 3_600_000L, true, 0,
                 List.of(new RewardDefinition.CommandReward("say weekly")));
 
         registry.save(gift);
 
         assertTrue(Files.isRegularFile(dataFolder.resolve("gifts/weekly.yml")));
         assertEquals("Weekly", registry.find("weekly").orElseThrow().displayName());
+        assertTrue(registry.find("weekly").orElseThrow().resetAtMidnight());
         assertEquals(1, registry.reload());
         assertEquals(1, registry.find("weekly").orElseThrow().rewards().size());
     }
@@ -85,7 +89,7 @@ class GiftRegistryTest {
         GiftRegistry registry = new GiftRegistry(dataFolder.toFile(), Logger.getAnonymousLogger());
         registry.reload();
 
-        registry.save(new GiftDefinition("seasonal", "After", "", 0L, 0, List.of()));
+        registry.save(new GiftDefinition("seasonal", "After", "", 0L, false, 0, List.of()));
 
         String saved = Files.readString(source, StandardCharsets.UTF_8);
         assertTrue(saved.contains("After"));

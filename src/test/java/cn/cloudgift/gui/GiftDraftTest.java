@@ -39,4 +39,15 @@ class GiftDraftTest {
         assertEquals(44, draft.remainingRewardCapacity(45));
         assertEquals(0, draft.remainingRewardCapacity(0));
     }
+
+    @Test
+    void persistsMidnightResetToggleIntoGiftDefinition() {
+        GiftDraft draft = GiftDraft.fresh("daily");
+
+        assertFalse(draft.resetAtMidnight());
+        draft.toggleResetAtMidnight();
+
+        assertTrue(draft.resetAtMidnight());
+        assertTrue(draft.toDefinition().resetAtMidnight());
+    }
 }

@@ -72,7 +72,11 @@ public final class ClaimService {
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
                 ClaimAttempt attempt = repository.attemptClaim(
-                        player.getUniqueId(), gift.id(), gift.cooldownMillis(), gift.maxClaims(), requestedAt);
+                        player.getUniqueId(),
+                        gift.id(),
+                        gift.claimableLastClaimAt(requestedAt, settings.zoneId()),
+                        gift.maxClaims(),
+                        requestedAt);
                 runOnMainThread(() -> finishClaim(player.getUniqueId(), gift, key, attempt));
             } catch (SQLException exception) {
                 plugin.getLogger().log(Level.SEVERE, "领取礼包时数据库操作失败", exception);
@@ -157,7 +161,7 @@ public final class ClaimService {
         if (gift.limitReached(record.claimCount())) {
             return false;
         }
-        return gift.nextClaimAt(record.lastClaimAt()) <= now;
+        return gift.nextClaimAt(record.lastClaimAt(), settings.zoneId()) <= now;
     }
 
     public void reset(CommandSender sender, UUID playerId, String playerLabel, GiftDefinition gift) {
@@ -206,7 +210,7 @@ public final class ClaimService {
             return;
         }
         if (!attempt.accepted()) {
-            long nextClaim = gift.nextClaimAt(attempt.lastClaimAt());
+            long nextClaim = gift.nextClaimAt(attempt.lastClaimAt(), settings.zoneId());
             messages.send(player, "cooldown",
                     giftDisplayName(gift),
                     Placeholder.unparsed("next_time", settings.format(nextClaim)));

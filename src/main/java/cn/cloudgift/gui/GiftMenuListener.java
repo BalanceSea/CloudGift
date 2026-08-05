@@ -130,6 +130,10 @@ public final class GiftMenuListener implements Listener {
                 draft.addMaxClaims(maxClaimsDelta(event));
                 gui.openEdit(player);
             }
+            case GiftEditorGui.SLOT_RESET_AT_MIDNIGHT -> {
+                draft.toggleResetAtMidnight();
+                gui.openEdit(player);
+            }
             case GiftEditorGui.SLOT_REWARDS -> gui.openRewards(player);
             case GiftEditorGui.SLOT_BACK -> {
                 gui.clearDraft(player.getUniqueId());

@@ -6,7 +6,7 @@ import java.util.UUID;
 
 public interface ClaimRepository extends AutoCloseable {
 
-    ClaimAttempt attemptClaim(UUID playerId, String giftId, long cooldownMillis, int maxClaims, long now)
+    ClaimAttempt attemptClaim(UUID playerId, String giftId, long lastClaimCutoff, int maxClaims, long now)
             throws SQLException;
 
     Map<String, ClaimRecord> loadClaims(UUID playerId) throws SQLException;

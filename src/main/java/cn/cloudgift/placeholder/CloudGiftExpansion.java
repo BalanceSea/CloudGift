@@ -87,7 +87,7 @@ public final class CloudGiftExpansion extends PlaceholderExpansion {
             if (lastClaim.isEmpty()) {
                 return settings.availableTime();
             }
-            long next = gift.nextClaimAt(lastClaim.getAsLong());
+            long next = gift.nextClaimAt(lastClaim.getAsLong(), settings.zoneId());
             return next <= System.currentTimeMillis() ? settings.availableTime() : settings.format(next);
         }
         if (normalized.startsWith("used_")) {

@@ -10,6 +10,9 @@ gifts:
     permission: ''
     # 两次成功领取之间的冷却时间，单位：小时；允许 0，默认值：24。
     cooldown-hours: 24
+    # 是否在进入下一自然日后立即刷新；允许 true/false，默认 false；开启时忽略 cooldown-hours。
+    # 自然日按 config.yml 的 time.zone-id 判断，修改后执行 /cloudgift reload 生效。
+    reset-at-midnight: false
     # 每位玩家累计可领取的总次数；0 表示不限次数，次数上限优先于冷却时间。
     max-claims: 1
     # 奖励按列表顺序发放；command 执行控制台命令，item 引用 items.yml 中保存的物品。
@@ -24,6 +27,9 @@ gifts:
     permission: cloudgift.gift.monthly
     # 冷却时间单位为小时，默认值：24。
     cooldown-hours: 24
+    # true 表示进入下一自然日的 00:00 后即可再次领取；默认 false，本示例启用。
+    # 开启时忽略 cooldown-hours，自然日使用 config.yml 的 time.zone-id；支持热重载。
+    reset-at-midnight: true
     # 累计领取次数上限；0 表示无限。
     max-claims: 0
     # 奖励按列表顺序执行。

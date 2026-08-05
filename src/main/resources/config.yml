@@ -18,7 +18,7 @@ storage:
 # DateTimeFormatter 格式；参考 Java DateTimeFormatter 文档
 time:
   pattern: yyyy-MM-dd HH:mm:ss # Java DateTimeFormatter 格式，默认值：yyyy-MM-dd HH:mm:ss。
-  zone-id: Asia/Shanghai # 时区 ID，默认值：Asia/Shanghai。
+  zone-id: Asia/Shanghai # 时区 ID，默认值：Asia/Shanghai；也用于 reset-at-midnight 的自然日边界。
 
 # PlaceholderAPI 返回的文本；修改后执行 /cloudgift reload 即可生效。
 placeholder:

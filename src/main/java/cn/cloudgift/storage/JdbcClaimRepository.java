@@ -38,9 +38,8 @@ public final class JdbcClaimRepository implements ClaimRepository {
     }
 
     @Override
-    public ClaimAttempt attemptClaim(UUID playerId, String giftId, long cooldownMillis, int maxClaims, long now)
+    public ClaimAttempt attemptClaim(UUID playerId, String giftId, long lastClaimCutoff, int maxClaims, long now)
             throws SQLException {
-        long cutoff = now - Math.min(now, Math.max(0L, cooldownMillis));
         // maxClaims <= 0 means unlimited; use a cap the counter can never reach.
         long limit = maxClaims > 0 ? maxClaims : Long.MAX_VALUE;
         String token = UUID.randomUUID().toString();
@@ -59,7 +58,7 @@ public final class JdbcClaimRepository implements ClaimRepository {
                     statement.setString(3, playerId.toString());
                     statement.setString(4, giftId);
                     statement.setLong(5, limit);
-                    statement.setLong(6, cutoff);
+                    statement.setLong(6, lastClaimCutoff);
                     if (statement.executeUpdate() == 1) {
                         connection.commit();
                         return ClaimAttempt.accepted(now, currentCount(connection, playerId, giftId));

@@ -56,6 +56,10 @@ public final class PluginSettings {
         }
     }
 
+    public ZoneId zoneId() {
+        return zoneId;
+    }
+
     public String availableTime() {
         return availableTime;
     }

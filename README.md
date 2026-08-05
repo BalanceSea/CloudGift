@@ -1,10 +1,10 @@
 # CloudGift
 
-CloudGift 1.4.0 是面向 Paper 1.21.11（Java 21）的礼包插件。它支持权限礼包、自定义领取冷却、累计领取次数、GUI 直接投放物品、控制台命令奖励、PlaceholderAPI，以及适合群组服的 MySQL/MariaDB 共享存储。
+CloudGift 1.5.0 是面向 Paper 1.21.11（Java 21）的礼包插件。它支持权限礼包、精确时长或跨零点刷新、累计领取次数、GUI 直接投放物品、控制台命令奖励、PlaceholderAPI，以及适合群组服的 MySQL/MariaDB 共享存储。
 
 ## 安装
 
-1. 将 `CloudGift-1.4.0.jar` 放入服务端的 `plugins` 目录。
+1. 将 `CloudGift-1.5.0.jar` 放入服务端的 `plugins` 目录。
 2. 如需变量功能，安装 PlaceholderAPI。
 3. 启动一次服务端，修改 `plugins/CloudGift/config.yml`、`messages.yml` 和礼包文件。
 4. 执行 `/cloudgift reload` 重载礼包、物品、消息、时间格式等配置。数据库连接设置变更后需要重启服务端。
@@ -49,6 +49,9 @@ gifts:
     permission: cloudgift.gift.monthly
     # 支持小数。冷却从该玩家本次成功占用领取资格的时刻开始计算。
     cooldown-hours: 24
+    # true：进入下一自然日的 00:00 后即可领取；false：按 cooldown-hours 精确计算。
+    # 默认 false；为 true 时忽略 cooldown-hours，并使用 config.yml 的 time.zone-id。
+    reset-at-midnight: true
     # 每位玩家累计可领取的总次数；0 表示不限次数。
     max-claims: 0
     rewards:
@@ -61,6 +64,8 @@ gifts:
         # 不填写 amount 时使用保存物品原本的数量；填写后以这里为准。
         amount: 1
 ```
+
+`reset-at-midnight` 适合每日礼包。例如玩家在 23:50 领取，配置为 `true` 时，次日 00:00 就能再次领取；配置为 `false` 且 `cooldown-hours: 24` 时，要等到次日 23:50。旧礼包缺少该字段时按 `false` 处理，不需要迁移数据库。该开关也可以在 `/cloudgift menu` 的礼包编辑界面中切换。
 
 控制台命令支持 `%player%`、`%uuid%`、`%gift%`，安装 PlaceholderAPI 后也会解析该玩家的其他 PAPI 变量。物品栏放不下的物品会掉落在玩家脚下。
 
@@ -126,7 +131,7 @@ storage:
     parameters: useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
 ```
 
-数据表会自动创建。领取资格使用数据库条件更新与唯一键进行原子竞争，因此同一玩家从不同子服同时发起领取时只有一个请求能够成功。每台子服的礼包文件也应保持一致；建议通过部署脚本同步这些文件。
+数据表会自动创建。领取资格使用数据库条件更新与唯一键进行原子竞争，因此同一玩家从不同子服同时发起领取时只有一个请求能够成功。每台子服的礼包文件和 `time.zone-id` 都应保持一致；建议通过部署脚本同步这些配置。
 
 默认 `sqlite` 只适合单服，不能把同一个 SQLite 文件给多台服务端共享。
 
@@ -140,7 +145,7 @@ storage:
 mvn clean package
 ```
 
-构建产物位于 `target/CloudGift-1.4.0.jar`。这是不包含数据库驱动的轻量 JAR；运行依赖声明在 `plugin.yml` 的 `libraries` 节点中。
+构建产物位于 `target/CloudGift-1.5.0.jar`。这是不包含数据库驱动的轻量 JAR；运行依赖声明在 `plugin.yml` 的 `libraries` 节点中。
 
 ## 联系方式
 
