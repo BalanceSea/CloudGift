@@ -14,9 +14,6 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
-import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
@@ -62,7 +59,7 @@ public final class GiftEditorGui {
         closeActiveItemInput(player);
         clearDraft(player.getUniqueId());
         GiftMenuHolder holder = new GiftMenuHolder(GiftMenuHolder.Type.LIST, player);
-        Inventory inventory = Bukkit.createInventory(holder, 54, Component.text("礼包编辑器"));
+        Inventory inventory = Bukkit.createInventory(holder, 54, "礼包编辑器");
         holder.setInventory(inventory);
 
         List<GiftDefinition> all = gifts.all();
@@ -99,22 +96,17 @@ public final class GiftEditorGui {
         ItemStack item = new ItemStack(material);
         ItemMeta meta = item.getItemMeta();
         if (meta != null) {
-            meta.displayName(clean(messages.parse(nameMiniMessage)));
+            meta.setDisplayName(messages.legacy(nameMiniMessage));
             if (!loreLines.isEmpty()) {
-                List<Component> lore = new ArrayList<>();
+                List<String> lore = new ArrayList<>();
                 for (String line : loreLines) {
-                    lore.add(clean(messages.parse(line)));
+                    lore.add(messages.legacy(line));
                 }
-                meta.lore(lore);
+                meta.setLore(lore);
             }
             item.setItemMeta(meta);
         }
         return item;
-    }
-
-    /** Removes the default italic styling Minecraft applies to custom item names. */
-    private Component clean(Component component) {
-        return component.decoration(TextDecoration.ITALIC, false);
     }
 
     private String trim(double value) {
@@ -122,6 +114,11 @@ public final class GiftEditorGui {
             return Long.toString((long) value);
         }
         return Double.toString(value);
+    }
+
+    private String inventoryTitle(String prefix, String id) {
+        String title = prefix + id;
+        return title.length() <= 32 ? title : title.substring(0, 29) + "...";
     }
 
     // === Edit menu ===
@@ -162,7 +159,7 @@ public final class GiftEditorGui {
             return;
         }
         GiftMenuHolder holder = new GiftMenuHolder(GiftMenuHolder.Type.EDIT, player);
-        Inventory inventory = Bukkit.createInventory(holder, 54, Component.text("编辑礼包: " + draft.id()));
+        Inventory inventory = Bukkit.createInventory(holder, 54, inventoryTitle("编辑礼包: ", draft.id()));
         holder.setInventory(inventory);
 
         inventory.setItem(SLOT_NAME, button(Material.NAME_TAG, "<aqua>显示名称",
@@ -207,7 +204,7 @@ public final class GiftEditorGui {
             return;
         }
         GiftMenuHolder holder = new GiftMenuHolder(GiftMenuHolder.Type.REWARDS, player);
-        Inventory inventory = Bukkit.createInventory(holder, 54, Component.text("奖励: " + draft.id()));
+        Inventory inventory = Bukkit.createInventory(holder, 54, inventoryTitle("奖励: ", draft.id()));
         holder.setInventory(inventory);
 
         List<RewardDefinition> rewards = draft.rewards();
@@ -241,15 +238,15 @@ public final class GiftEditorGui {
         saved.setAmount(Math.min(Math.max(1, configuredAmount), Math.max(1, saved.getMaxStackSize())));
         ItemMeta meta = saved.getItemMeta();
         if (meta != null) {
-            List<Component> lore = meta.lore() == null ? new ArrayList<>() : new ArrayList<>(meta.lore());
+            List<String> lore = meta.getLore() == null ? new ArrayList<>() : new ArrayList<>(meta.getLore());
             if (!lore.isEmpty()) {
-                lore.add(Component.empty());
+                lore.add("");
             }
-            lore.add(clean(messages.parse("<gray>奖励数量: <white>" + configuredAmount)));
-            lore.add(clean(messages.parse("<dark_gray>物品 ID: " + itemReward.itemId())));
-            lore.add(Component.empty());
-            lore.add(clean(messages.parse("<red>Shift + 左键 删除")));
-            meta.lore(lore);
+            lore.add(messages.legacy("<gray>奖励数量: <white>" + configuredAmount));
+            lore.add(messages.legacy("<dark_gray>物品 ID: " + itemReward.itemId()));
+            lore.add("");
+            lore.add(messages.legacy("<red>Shift + 左键 删除"));
+            meta.setLore(lore);
             saved.setItemMeta(meta);
         }
         return saved;
@@ -270,7 +267,7 @@ public final class GiftEditorGui {
         Inventory inventory = Bukkit.createInventory(
                 holder,
                 ITEM_INPUT_INVENTORY_SIZE,
-                Component.text("放入礼包物品: " + draft.id()));
+                inventoryTitle("放入礼包物品: ", draft.id()));
         holder.setInventory(inventory);
 
         ItemStack filler = button(Material.GRAY_STAINED_GLASS_PANE, "<dark_gray>控制区域", List.of());

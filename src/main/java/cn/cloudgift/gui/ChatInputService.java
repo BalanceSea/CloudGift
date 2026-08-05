@@ -1,17 +1,15 @@
 package cn.cloudgift.gui;
 
-import io.papermc.paper.event.player.AsyncChatEvent;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -45,14 +43,14 @@ public final class ChatInputService implements Listener {
     }
 
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = false)
-    public void onChat(AsyncChatEvent event) {
+    public void onChat(AsyncPlayerChatEvent event) {
         UUID playerId = event.getPlayer().getUniqueId();
         Consumer<String> callback = pending.remove(playerId);
         if (callback == null) {
             return;
         }
         event.setCancelled(true);
-        String message = plainText(event.message()).trim();
+        String message = event.getMessage().trim();
         Bukkit.getScheduler().runTask(plugin, () -> {
             if (!message.equalsIgnoreCase("cancel")) {
                 callback.accept(message);
@@ -63,9 +61,5 @@ public final class ChatInputService implements Listener {
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
         pending.remove(event.getPlayer().getUniqueId());
-    }
-
-    private String plainText(Component component) {
-        return PlainTextComponentSerializer.plainText().serialize(component);
     }
 }

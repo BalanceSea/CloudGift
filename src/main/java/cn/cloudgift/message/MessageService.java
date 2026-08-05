@@ -10,6 +10,7 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -19,6 +20,11 @@ public final class MessageService {
     private final JavaPlugin plugin;
     private final File file;
     private final MiniMessage miniMessage = MiniMessage.miniMessage();
+    private final LegacyComponentSerializer legacySerializer = LegacyComponentSerializer.builder()
+            .character(LegacyComponentSerializer.SECTION_CHAR)
+            .hexColors()
+            .useUnusualXRepeatedCharacterHexFormat()
+            .build();
     private volatile YamlConfiguration messages;
     private volatile Component prefix = Component.empty();
 
@@ -49,11 +55,19 @@ public final class MessageService {
     public void send(CommandSender sender, String key, TagResolver... resolvers) {
         String template = messages.getString(key, "<red>Missing message: " + key);
         Component body = miniMessage.deserialize(template, resolvers);
-        sender.sendMessage(prefix.append(body));
+        sender.sendMessage(legacySerializer.serialize(prefix.append(body)));
     }
 
     public Component parse(String miniMessageText) {
         return miniMessage.deserialize(miniMessageText);
+    }
+
+    public String legacy(String miniMessageText) {
+        return legacy(parse(miniMessageText));
+    }
+
+    public String legacy(Component component) {
+        return legacySerializer.serialize(component);
     }
 
     private YamlConfiguration loadBundledDefaults() {

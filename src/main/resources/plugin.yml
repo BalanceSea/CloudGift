@@ -1,13 +1,15 @@
-# 插件描述文件：Paper 1.21.11、Java 21；第三方运行库由 Paper 的 Library Loader 加载。
+# 插件描述文件：Spigot 1.20.1、Java 17；第三方运行库由服务端 Library Loader 加载。
 # 修改命令、权限或 libraries 后需要重启服务端，作者与联系信息见 README.md。
 name: CloudGift
 version: '${project.version}'
 main: cn.cloudgift.CloudGiftPlugin
-api-version: '1.21'
+api-version: '1.20'
 authors: [MoutainSeaL]
 description: 支持共享数据库、权限与自定义冷却的礼包插件
 softdepend: [PlaceholderAPI]
 libraries:
+  - net.kyori:adventure-text-minimessage:${adventure.version}
+  - net.kyori:adventure-text-serializer-legacy:${adventure.version}
   - com.zaxxer:HikariCP:${hikaricp.version}
   - com.mysql:mysql-connector-j:${mysql-connector.version}
   - org.xerial:sqlite-jdbc:${sqlite-jdbc.version}

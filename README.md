@@ -1,122 +1,174 @@
 # CloudGift
 
-CloudGift 1.5.0 是面向 Paper 1.21.11（Java 21）的礼包插件。它支持权限礼包、精确时长或跨零点刷新、累计领取次数、GUI 直接投放物品、控制台命令奖励、PlaceholderAPI，以及适合群组服的 MySQL/MariaDB 共享存储。
+CloudGift `1.6.0` 是面向 **Spigot 1.20.1 / Java 17** 的礼包插件。它支持权限礼包、精确小时冷却、跨零点刷新、累计领取次数、命令与完整物品奖励、游戏内 GUI 编辑、PlaceholderAPI，以及 SQLite / MySQL / MariaDB 存储。
 
-## 安装
+> 跨零点刷新指按配置时区判断自然日：启用后，只要经过下一次 00:00 就能再次领取；关闭后才按实际经过的小时数计算。
 
-1. 将 `CloudGift-1.5.0.jar` 放入服务端的 `plugins` 目录。
-2. 如需变量功能，安装 PlaceholderAPI。
-3. 启动一次服务端，修改 `plugins/CloudGift/config.yml`、`messages.yml` 和礼包文件。
-4. 执行 `/cloudgift reload` 重载礼包、物品、消息、时间格式等配置。数据库连接设置变更后需要重启服务端。
+## ✨ 主要功能
 
-CloudGift 使用服务端的 Library Loader 在首次启动时从 Maven Central 下载 HikariCP、MySQL Connector/J 和 SQLite JDBC，不把数据库驱动打包进插件 JAR。首次启动必须能够访问 Maven Central，下载后的库由服务端缓存。
+- 为每个礼包单独设置显示名称、权限、冷却和累计领取次数。
+- `reset-at-midnight: true` 时跨过下一自然日 00:00 即刷新，并忽略小时冷却。
+- `reset-at-midnight: false` 时按 `cooldown-hours` 精确计算等待时间。
+- 奖励支持控制台命令和保留名称、Lore、附魔等数据的完整物品。
+- 游戏内 GUI 可新建、编辑、删除礼包，并批量投放最多 45 项物品奖励。
+- SQLite 适合单服；MySQL / MariaDB 可让多个子服共享领取记录。
+- 数据库条件更新和唯一键共同防止跨服并发重复领取。
+- PlaceholderAPI 可显示能否领取、下次领取时间、已用次数、上限和剩余次数。
+- 玩家数据和领取操作异步访问数据库，避免阻塞服务器主线程。
 
-Paper 1.21.11 使用 Java 21 或更新版本运行。本项目编译目标固定为 Java 21。
+## 📦 运行环境
 
-## 玩家与管理命令
+| 项目 | 要求 | 说明 |
+| --- | --- | --- |
+| Minecraft | `1.20.1` | 当前编译与测试目标 |
+| 服务端 | Spigot `1.20.1` | 使用 Spigot 公共 API，不引用 Paper 专属类 |
+| Java | `17` 或更新版本 | 编译字节码目标为 Java 17 |
+| PlaceholderAPI | `2.12.3`，可选 | 缺失时仅关闭 PAPI 变量和奖励中的外部变量解析 |
 
-| 命令 | 权限 | 说明 |
-|---|---|---|
-| `/gift <礼包ID>` | `cloudgift.command.gift` | 领取礼包 |
-| `/cloudgift claim <礼包ID>` | `cloudgift.command.gift` | 领取礼包的另一种写法 |
-| `/cloudgift help` | 无 | 查看当前 sender 可用的命令 |
-| `/cloudgift list` | `cloudgift.command.list` | 查看已载入的礼包 |
-| `/cloudgift add <物品ID>` | `cloudgift.command.add` | 保存主手物品（含名称、附魔和组件等） |
-| `/cloudgift remove <在线玩家名或UUID> <礼包ID>` | `cloudgift.command.remove` | 清除领取记录 |
-| `/cloudgift reload` | `cloudgift.command.reload` | 重载配置 |
-| `/cloudgift menu` | `cloudgift.command.menu` | 打开礼包编辑 GUI |
+插件没有必须手动安装的前置插件。以下第三方库由服务端的 Library Loader 下载，不会打包进 CloudGift JAR：
 
-旧命令仍可使用：`saveitem` 是 `add` 的别名，`reset` 是 `remove` 的别名，`gui` 和 `editor` 是 `menu` 的别名。`cloudgift.admin` 通过子权限继承全部管理命令权限。
+| 运行库 | 版本 | 用途 |
+| --- | --- | --- |
+| Adventure MiniMessage | `4.17.0` | 解析消息和礼包显示名称 |
+| Adventure Legacy Serializer | `4.17.0` | 把 MiniMessage 转为 Spigot 可显示的颜色文本 |
+| HikariCP | `7.1.0` | 数据库连接池 |
+| MySQL Connector/J | `9.7.0` | MySQL / MariaDB 驱动 |
+| SQLite JDBC | `3.53.2.0` | SQLite 驱动 |
 
-每个礼包可单独填写权限，例如 `cloudgift.gift.monthly`。使用 LuckPerms 等权限插件，在玩家购买月卡后授予该权限即可：
+首次启动需要能访问 Maven Central。依赖下载成功后由服务端缓存。
+
+## 🚀 安装
+
+1. 使用 Java 17 启动 Spigot 1.20.1。
+2. 将 `CloudGift-1.6.0.jar` 放入服务端的 `plugins/` 目录。
+3. 如需变量功能，将 PlaceholderAPI 放入 `plugins/`。
+4. 启动一次服务器，等待 Library Loader 下载运行库。
+5. 修改 `plugins/CloudGift/config.yml`、`messages.yml` 和 `gifts/` 下的礼包文件。
+6. 数据库连接设置修改后重启；其他支持热重载的设置使用 `/cloudgift reload`。
+
+首次安装会生成：
 
 ```text
-/lp user 玩家名 permission set cloudgift.gift.monthly true
+plugins/CloudGift/
+├── config.yml
+├── messages.yml
+├── items.yml
+├── data.db
+└── gifts/
+    ├── novice.yml
+    └── monthly.yml
 ```
 
-领取成功、无权限、冷却中和重置成功等提示里的 `<gift>` 会显示礼包的 `display-name`，而不是内部礼包 ID。礼包 ID 仍用于命令、权限判断、PAPI 和数据库记录。
+`data.db` 只在 SQLite 模式使用。插件也兼容旧版根目录 `gifts.yml` / `gifts.yaml`。
 
-## 礼包配置
+## 🎮 命令
 
-新安装默认会在 `plugins/CloudGift/gifts/` 生成 `novice.yml` 和 `monthly.yml`。礼包也可继续写在旧版的 `plugins/CloudGift/gifts.yml`，或拆分到该目录下任意层级的多个 `.yml` 或 `.yaml` 文件。插件启动时会自动创建 `gifts` 目录，修改文件后执行 `/cloudgift reload` 即可生效。
+| 命令 | 权限 | 默认授权 | 说明 |
+| --- | --- | --- | --- |
+| `/gift <礼包ID>` | `cloudgift.command.gift` | 所有人 | 领取礼包 |
+| `/cloudgift claim <礼包ID>` | `cloudgift.command.gift` | 所有人 | 领取礼包的另一种写法 |
+| `/cloudgift help` | 无 | 所有人 | 查看当前执行者可用的命令 |
+| `/cloudgift list` | `cloudgift.command.list` | OP | 查看已载入礼包 |
+| `/cloudgift add <物品ID>` | `cloudgift.command.add` | OP | 保存主手完整物品 |
+| `/cloudgift remove <在线玩家名或UUID> <礼包ID>` | `cloudgift.command.remove` | OP | 删除该玩家的礼包领取记录 |
+| `/cloudgift reload` | `cloudgift.command.reload` | OP | 重载消息、物品、礼包和非连接类主配置 |
+| `/cloudgift menu` | `cloudgift.command.menu` | OP | 打开礼包编辑 GUI |
 
-目录内的文件优先于旧版根目录文件，适合逐步把礼包从一个大文件迁移到多个文件。每个文件使用相同的 `gifts:` 顶层结构；所有文件中的礼包 ID 必须唯一，只能使用小写字母、数字、下划线和连字符。通过 `/cloudgift menu` 新建的礼包会自动保存为 `gifts/<礼包ID>.yml`，已有礼包会写回它原本所在的文件。
+别名：
+
+- `/gift`：`/libao`、`/cgift`
+- `/cloudgift`：`/cloudgifts`
+- `menu`：`gui`、`editor`
+- `add`：`saveitem`
+- `remove`：`reset`
+
+## 🔐 权限
+
+| 权限 | 默认值 | 用途 |
+| --- | --- | --- |
+| `cloudgift.admin` | OP | 包含 reload、menu、add、remove、list 管理权限 |
+| `cloudgift.command.gift` | 所有人 | 使用领取命令 |
+| `cloudgift.command.reload` | OP | 重载配置 |
+| `cloudgift.command.menu` | OP | 打开礼包编辑器 |
+| `cloudgift.command.add` | OP | 保存主手物品 |
+| `cloudgift.command.remove` | OP | 删除领取记录 |
+| `cloudgift.command.list` | OP | 查看礼包列表 |
+
+每个礼包还可以设置独立权限，例如 `cloudgift.gift.monthly`。空字符串表示不额外限制。
+
+## ⚙️ 礼包配置
+
+礼包文件位于 `plugins/CloudGift/gifts/`，可按功能拆分为任意 `.yml` 或 `.yaml` 文件。所有文件都使用 `gifts:` 顶层结构：
 
 ```yaml
 gifts:
   monthly:
     display-name: '<gold>月卡礼包'
     permission: cloudgift.gift.monthly
-    # 支持小数。冷却从该玩家本次成功占用领取资格的时刻开始计算。
+    # false 时从上次成功领取起精确等待 24 小时。
     cooldown-hours: 24
-    # true：进入下一自然日的 00:00 后即可领取；false：按 cooldown-hours 精确计算。
-    # 默认 false；为 true 时忽略 cooldown-hours，并使用 config.yml 的 time.zone-id。
+    # true 时忽略 cooldown-hours，进入下一自然日即可领取。
     reset-at-midnight: true
-    # 每位玩家累计可领取的总次数；0 表示不限次数。
+    # 0 表示不限累计领取次数。
     max-claims: 0
     rewards:
       - type: command
-        command: 'money give %player% 1000'
-      - type: command
-        command: 'say %player% 领取了 %gift%'
+        command: 'give %player% diamond 3'
       - type: item
         item: monthly_sword
-        # 不填写 amount 时使用保存物品原本的数量；填写后以这里为准。
         amount: 1
 ```
 
-`reset-at-midnight` 适合每日礼包。例如玩家在 23:50 领取，配置为 `true` 时，次日 00:00 就能再次领取；配置为 `false` 且 `cooldown-hours: 24` 时，要等到次日 23:50。旧礼包缺少该字段时按 `false` 处理，不需要迁移数据库。该开关也可以在 `/cloudgift menu` 的礼包编辑界面中切换。
+礼包 ID 只能包含小写字母、数字、下划线和连字符，最长 128 个字符。目录内礼包优先于根目录旧文件；重复 ID 保留先载入的定义。
 
-控制台命令支持 `%player%`、`%uuid%`、`%gift%`，安装 PlaceholderAPI 后也会解析该玩家的其他 PAPI 变量。物品栏放不下的物品会掉落在玩家脚下。
+### 刷新方式
 
-先把物品拿在主手，再执行：
+| 配置 | 行为 |
+| --- | --- |
+| `reset-at-midnight: true` | 按 `time.zone-id` 计算下一自然日 00:00；忽略 `cooldown-hours` |
+| `reset-at-midnight: false` | 从上次成功领取时刻起，精确等待 `cooldown-hours` |
+
+例如玩家在 23:50 领取：
+
+- 开启跨零点刷新时，次日 00:00 即可再次领取。
+- 关闭跨零点刷新且冷却为 24 小时时，次日 23:50 才能再次领取。
+
+### 命令奖励变量
+
+- `%player%`：玩家名称
+- `%uuid%`：玩家 UUID
+- `%gift%`：礼包 ID
+- 安装 PlaceholderAPI 后还会解析其他 PAPI 变量
+
+命令以控制台身份执行，开头的 `/` 会自动移除。
+
+### 物品奖励
+
+手持目标物品执行：
 
 ```text
 /cloudgift add monthly_sword
 ```
 
-物品会保存至 `items.yml`，礼包奖励通过物品 ID 引用它。
+物品会完整保存到 `items.yml`。背包放不下的奖励会掉落在玩家脚下。
 
-也可以执行 `/cloudgift menu` 打开礼包编辑器，在“奖励列表”中左键“添加物品奖励”。插件会打开一个 54 格投放界面：
+也可以在 `/cloudgift menu` 的奖励列表中左键“添加物品奖励”，把物品放进前 45 格。保存、取消、直接关闭、退出服务器或插件停用时，投入的原物品都会返还；背包溢出部分会掉落在管理员脚下。
 
-- 前 45 格是物品区，可以像箱子一样普通点击、Shift 转移、拖拽、按数字键或使用副手交换键放入物品。
-- 点击底部“保存物品奖励”后，每个非空格都会成为一项奖励；名称、Lore、附魔和组件会完整写入 `items.yml`。
-- 保存、取消、直接关闭 GUI、退出服务器或插件停用时，放入的原物品都会返还；背包已满的部分会掉落在管理员脚下。
-- 保存整批物品时只写入一次 `items.yml`；写入失败会保留 GUI 内容，不会产生半套奖励。
+## 🗄️ 数据库
 
-插件会自动生成 `__cloudgift_gui_` 开头的内部物品 ID。右键“添加物品奖励”仍可输入已有物品 ID 和数量。
+### SQLite 单服
 
-## PlaceholderAPI 变量
-
-把 `<礼包ID>` 换成实际 ID，例如 `monthly`：
-
-| 变量 | 返回值 |
-|---|---|
-| `%cloudgift_can_<礼包ID>%` | 当前可以领取返回 `yes`，否则返回 `no` |
-| `%cloudgift_next_<礼包ID>%` | 下次领取时间；已可领取时返回 `可领取` |
-
-示例：
-
-```text
-%cloudgift_can_monthly%
-%cloudgift_next_monthly%
-```
-
-玩家刚进服、数据仍在异步载入时，`can` 安全地返回 `no`，`next` 返回 `数据加载中`；载入通常在很短时间内完成。以上文字可在 `config.yml` 的 `placeholder` 节点修改。
-
-时间格式位于 `config.yml`：
+默认配置即可使用：
 
 ```yaml
-time:
-  pattern: yyyy年MM月dd日 HH:mm:ss
-  zone-id: Asia/Shanghai
+storage:
+  type: sqlite
+  table-prefix: cloudgift_
 ```
 
-`pattern` 使用 Java [`DateTimeFormatter`](https://docs.oracle.com/javase/8/docs/api/java/time/format/DateTimeFormatter.html) 规则。
+数据保存到 `plugins/CloudGift/data.db`。不要让多台服务器共享同一个 SQLite 文件。
 
-## 群组服数据库
-
-所有子服的 `config.yml` 使用同一个 MySQL/MariaDB 数据库：
+### MySQL / MariaDB 群组服
 
 ```yaml
 storage:
@@ -127,25 +179,75 @@ storage:
     port: 3306
     database: minecraft
     username: cloudgift
-    password: strong_password
+    password: change_me
     parameters: useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
 ```
 
-数据表会自动创建。领取资格使用数据库条件更新与唯一键进行原子竞争，因此同一玩家从不同子服同时发起领取时只有一个请求能够成功。每台子服的礼包文件和 `time.zone-id` 都应保持一致；建议通过部署脚本同步这些配置。
+所有子服需要使用同一数据库、表前缀、礼包定义和 `time.zone-id`。插件通过数据库条件更新与唯一键保证同一玩家跨服同时领取时只成功一次。
 
-默认 `sqlite` 只适合单服，不能把同一个 SQLite 文件给多台服务端共享。
+`storage.*` 修改后必须重启服务器。切换存储类型不会自动迁移旧数据，请先备份并自行迁移 `<table-prefix>claims` 表。
 
-## 自定义消息
+## PlaceholderAPI
 
-所有提示位于 `messages.yml`，使用 MiniMessage 格式，例如 `<green>`、`<red>`、`<#66ccff>`。可用占位内容已在默认文件中给出。
+把 `<礼包ID>` 替换为实际 ID：
 
-## 构建
+| 变量 | 返回值 |
+| --- | --- |
+| `%cloudgift_can_<礼包ID>%` | 可领取返回 `yes`，其他状态返回 `no` |
+| `%cloudgift_next_<礼包ID>%` | 可领取文本、状态文本或下次领取时间 |
+| `%cloudgift_used_<礼包ID>%` | 已领取次数 |
+| `%cloudgift_limit_<礼包ID>%` | 次数上限；不限返回 `∞` |
+| `%cloudgift_remaining_<礼包ID>%` | 剩余次数；不限返回 `∞` |
+
+示例：
+
+```text
+%cloudgift_can_monthly%
+%cloudgift_next_monthly%
+%cloudgift_remaining_monthly%
+```
+
+玩家数据仍在异步载入时，`can` 返回 `no`，`next` 返回 `数据加载中`。
+
+## 🔄 从 1.5.0 升级
+
+1. 停服并备份 `plugins/CloudGift/` 与数据库。
+2. 将旧 JAR 替换为 `CloudGift-1.6.0.jar`。
+3. 使用 Java 17 或更新版本启动 Spigot 1.20.1。
+4. 首次启动会额外下载 Adventure MiniMessage 与 Legacy Serializer。
+5. 原有礼包、物品和领取记录格式保持兼容，无需修改 `reset-at-midnight` 或迁移数据库。
+
+本次版本从 Paper 1.21.11 / Java 21 迁移到 Spigot 1.20.1 / Java 17。不要继续在 Minecraft 1.21 服务端使用此构建。
+
+## ❓ 常见问题
+
+### 为什么经过 00:00 仍然不能领取？
+
+确认礼包设置了 `reset-at-midnight: true`，并检查 `config.yml` 的 `time.zone-id`。关闭该选项时会按小时精确计算。
+
+### 修改 MySQL 配置后为什么没有生效？
+
+数据库连接池只在插件启动时创建。修改 `storage.*` 后需要完整重启，`/cloudgift reload` 不会重建连接池。
+
+### 奖励失败后为什么仍显示已经领取？
+
+领取资格会先原子写入数据库，再回到主线程发奖。这样可以防止跨服重复领取。管理员应根据控制台日志检查失败命令或缺失物品，并在确认后使用 `remove` 重置记录。
+
+### 没装 PlaceholderAPI 能用吗？
+
+可以。领取、GUI、命令奖励内置变量和数据库功能都可用；只有 CloudGift 的 PAPI 变量及奖励中的其他 PAPI 变量不可用。
+
+## 🧰 构建
+
+使用 JDK 17 和 Maven：
 
 ```text
 mvn clean package
 ```
 
-构建产物位于 `target/CloudGift-1.5.0.jar`。这是不包含数据库驱动的轻量 JAR；运行依赖声明在 `plugin.yml` 的 `libraries` 节点中。
+构建产物：`target/CloudGift-1.6.0.jar`。
+
+Spigot API、PlaceholderAPI 和全部运行库使用 `provided`，最终 JAR 不包含这些依赖。运行库坐标统一声明在 `plugin.yml` 的 `libraries` 中。
 
 ## 联系方式
 
